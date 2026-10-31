@@ -1,11 +1,6 @@
-[build]
-  base = "frontend"
-  command = "npm run build"
-  publish = "dist"
-
 [[redirects]]
   from = "/api/*"
-  to = "https://baobab-backend-uxgz.onrender.com/api/:splat"
+  to = "https://baobab-backend-uxgz.onrender.com/:splat"
   status = 200
   force = true
 
