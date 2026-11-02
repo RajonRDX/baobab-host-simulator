@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.db
+*.sqlite3
+
+# Secrets
+.env
+.env.local
+.env.production
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/node_modules/
+
+# Release & Logs
+release/
+*.zip
+*.log
+
+# [PATCH step00_02:gitignore_backups]
+_backups/
+
