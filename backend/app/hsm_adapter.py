@@ -16,7 +16,6 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import HsmAuditLog, HsmKeyReference, HsmOperation
 from app.security import mask_pan, sanitize_dict
-# [PATCH step07:hsm_import_trace]
 from app.context_trace import get_correlation_id, record_crypto_step
 
 
@@ -37,13 +36,12 @@ class SoftHsmCryptoCore:
         "ZPK":   {"code": "001", "pair": "06_07", "variant": 0x00},
         "AWK":   {"code": "001", "pair": "06_07", "variant": 0x00},
         "IWK":   {"code": "001", "pair": "06_07", "variant": 0x00},
-        "PVK":   {"code": "008", "pair": "14_15", "variant": 0x00},
-        "CVK":   {"code": "008", "pair": "14_15", "variant": 0x00},
+        "PVK":   {"code": "002", "pair": "14_15", "variant": 0x00},
+        "CVK":   {"code": "402", "pair": "14_15", "variant": 0xDE},
         "TAK":   {"code": "003", "pair": "16_17", "variant": 0x00},
         "MK-AC": {"code": "109", "pair": "28_29", "variant": 0x00},
     }
 
-    # Internal HSM protected key memory (never stored in SQL tables)
     INTERNAL_CLEAR_KEYS = {
         "ZMK_MAIN":    "0123456789ABCDEF0123456789ABCDEF",
         "TMK_POS_01":  "FEDCBA9876543210FEDCBA9876543210",
@@ -66,34 +64,32 @@ class SoftHsmCryptoCore:
         raw_key = bytes.fromhex(key_hex)
         if len(raw_key) == 16:
             raw_key = raw_key + raw_key[:8]
-        
+
         k1 = raw_key[:8]
         k2 = raw_key[8:16]
         k3 = raw_key[16:24]
-        
+
         data = bytes.fromhex(data_hex)
         if len(data) % 8 != 0:
             data = data.ljust((len(data) + 7) // 8 * 8, b"\x00")
-            
+
         c1 = DES.new(k1, DES.MODE_ECB)
         c2 = DES.new(k2, DES.MODE_ECB)
         c3 = DES.new(k3, DES.MODE_ECB)
-        
+
         out = bytearray()
         for i in range(0, len(data), 8):
             block = data[i:i+8]
             if not decrypt:
-                # EDE: Encrypt with k1, Decrypt with k2, Encrypt with k3
                 b = c1.encrypt(block)
                 b = c2.decrypt(b)
                 b = c3.encrypt(b)
             else:
-                # DED: Decrypt with k3, Encrypt with k2, Decrypt with k1
                 b = c3.decrypt(block)
                 b = c2.encrypt(b)
                 b = c1.decrypt(b)
             out.extend(b)
-            
+
         return out.hex().upper()
 
     @classmethod
@@ -121,7 +117,7 @@ class SoftHsmCryptoCore:
 
     @classmethod
     def pack_iso0_pin_block(cls, pin: str, pan: str, awk_hex: str) -> str:
-        pin_part = f"0{len(pin)}{pin}".ljust(16, "F")
+        pin_part = f"0{len(pin):X}{pin}".ljust(16, "F")
         pan12 = pan[-13:-1].zfill(12)
         pan_part = f"0000{pan12}"
         clear_block = cls.xor_hex(pin_part, pan_part)
@@ -166,8 +162,11 @@ class SoftHsmCryptoCore:
         e1 = DES.new(bytes.fromhex(k_a), DES.MODE_ECB).encrypt(bytes.fromhex(b1)).hex().upper()
         xored = cls.xor_hex(e1, b2)
         enc = cls.des3_ecb_hex(xored, cvk_hex, decrypt=False)
-        digits = "".join(ch for ch in enc if ch.isdigit())
-        return digits[:3].zfill(3)
+        digits = [ch for ch in enc if ch.isdigit()]
+        for ch in enc:
+            if ch in "ABCDEF":
+                digits.append(str(int(ch, 16) - 10))
+        return "".join(digits[:3]).zfill(3)
 
     @classmethod
     def parse_de55(cls, hex_str: str) -> List[Dict[str, Any]]:
@@ -245,23 +244,34 @@ class HSMAdapter:
         self.db = db
         self.mode = settings.HSM_MODE
 
-# [PATCH step10:hsm_adapter_strict_key_resolution]
+    def _is_external_mode(self) -> bool:
+        return self.mode.upper() in ("SOFT_HSM_REMOTE", "EXTERNAL_HSM")
+
+    def _resolve_external_token(self, key_identifier: str) -> HsmKeyReference:
+        from app.lmk_key_management_service import LMKKeyManagementService
+        svc = LMKKeyManagementService(self.db)
+        return svc.resolve_external_key_record(key_identifier)
+
     def _resolve_key(self, key_identifier: str) -> Tuple[Optional[HsmKeyReference], str]:
+        if self._is_external_mode():
+            raise RuntimeError(
+                f"Clear key resolution (_resolve_key) is prohibited when External Soft-HSM is active (key: {key_identifier})."
+            )
         key_ref = (
             self.db.query(HsmKeyReference)
-            .filter(HsmKeyReference.key_identifier == key_identifier)
+            .filter(
+                HsmKeyReference.key_identifier == key_identifier,
+                HsmKeyReference.provider_type != "EXTERNAL_HSM",
+            )
             .first()
         )
-        # 1. Resolve from database clear_key_hex if ceremony-created
         if key_ref and key_ref.clear_key_hex:
             return key_ref, key_ref.clear_key_hex
 
-        # 2. Resolve from internal protected key dictionary
         if key_identifier in SoftHsmCryptoCore.INTERNAL_CLEAR_KEYS:
             return key_ref, SoftHsmCryptoCore.INTERNAL_CLEAR_KEYS[key_identifier]
 
-        # 3. Strict error if key is unknown
-        raise ValueError(f'Unknown cryptographic key reference: {key_identifier}')
+        raise ValueError(f"Unknown cryptographic key reference: {key_identifier}")
 
     def _record_operation(
         self,
@@ -319,8 +329,62 @@ class HSMAdapter:
         }
 
     def pack_test_pin_block_server_side(self, clear_pin: str, pan: str, awk_id: str = "AWK_ATM_01") -> str:
+        if self._is_external_mode():
+            from app.lmk_key_management_service import ExternalSoftHSMBridge
+            awk_rec = self._resolve_external_token(awk_id)
+            pin_part = f"0{len(clear_pin):X}{clear_pin}".ljust(16, "F")
+            pan12 = pan[-13:-1].zfill(12)
+            clear_iso0 = SoftHsmCryptoCore.xor_hex(pin_part, f"0000{pan12}")
+            bridge = ExternalSoftHSMBridge()
+            # PUGD0539-003 Section 2.2.2 M0 Command with Key Type 001 (ZPK/AWK under LMK 06-07)
+            raw_m0_cmd = f"0000M00011001{awk_rec.encrypted_key_block}0010{clear_iso0}"
+            tx = bridge.execute_command(raw_m0_cmd, synthetic_mode=False)
+            if tx.get("status_code") != "00":
+                raise ValueError(
+                    f"External Soft-HSM failed to encrypt test PIN block under {awk_id} (Status {tx.get('status_code')})"
+                )
+            raw_resp = tx.get("raw_response", "")
+            return raw_resp[-16:]
         _, awk_clear = self._resolve_key(awk_id)
         return SoftHsmCryptoCore.pack_iso0_pin_block(clear_pin, pan, awk_clear)
+
+    def generate_pin_pvv(
+        self,
+        pan: str,
+        clear_pin: str,
+        pvki: str = "1",
+        pvk_id: str = "PVK_VISA_01",
+    ) -> str:
+        if self._is_external_mode():
+            from app.lmk_key_management_service import ExternalSoftHSMBridge
+            pvk_rec = self._resolve_external_token(pvk_id)
+            bridge = ExternalSoftHSMBridge()
+            raw_cmd = f"0000DG{pvk_rec.encrypted_key_block}{clear_pin[:4].zfill(4)}{pan}{pvki[0]}"
+            tx = bridge.execute_command(raw_cmd, synthetic_mode=False)
+            if tx.get("status_code") != "00":
+                raise ValueError(f"External Soft-HSM DG command failed with Status {tx.get('status_code')}")
+            return tx["raw_response"][8:12]
+        _, pvk_clear = self._resolve_key(pvk_id)
+        return SoftHsmCryptoCore.calculate_visa_pvv(pan, clear_pin, pvki, pvk_clear)
+
+    def generate_card_cvv(
+        self,
+        pan: str,
+        expiry_yy_mm: str,
+        service_code: str = "101",
+        cvk_id: str = "CVK_MAIN_01",
+    ) -> str:
+        if self._is_external_mode():
+            from app.lmk_key_management_service import ExternalSoftHSMBridge
+            cvk_rec = self._resolve_external_token(cvk_id)
+            bridge = ExternalSoftHSMBridge()
+            raw_cmd = f"0000CW{cvk_rec.encrypted_key_block}{pan};{expiry_yy_mm}{service_code}"
+            tx = bridge.execute_command(raw_cmd, synthetic_mode=False)
+            if tx.get("status_code") != "00":
+                raise ValueError(f"External Soft-HSM CW command failed with Status {tx.get('status_code')}")
+            return tx["raw_response"][8:11]
+        _, cvk_clear = self._resolve_key(cvk_id)
+        return SoftHsmCryptoCore.calculate_cvv(pan, expiry_yy_mm, service_code, cvk_clear)
 
     def verify_pin_pvv(
         self,
@@ -333,32 +397,47 @@ class HSMAdapter:
         transaction_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
+        if self._is_external_mode():
+            from app.lmk_key_management_service import ExternalSoftHSMBridge
+            awk_rec = self._resolve_external_token(awk_id)
+            pvk_rec = self._resolve_external_token(pvk_id)
+            bridge = ExternalSoftHSMBridge()
+            pan12 = pan[-13:-1].zfill(12)
+            raw_cmd = f"0000DC01{awk_rec.encrypted_key_block}{encrypted_pin_block}01{pan12}{pvk_rec.encrypted_key_block}{pvki[0]}{expected_pvv}"
+            tx = bridge.execute_command(raw_cmd, synthetic_mode=False)
+            err = tx.get("status_code", "15")
+            matched = err == "00"
+            status = "APPROVED" if matched else ("DECLINED" if err == "01" else "ERROR")
+            dur = max(1, int((time.perf_counter() - t0) * 1000))
+            return self._record_operation(
+                operation_type="PIN_PVV_VERIFY (Thales DC/DD - External Soft-HSM)",
+                key_ref=pvk_rec,
+                sanitized_req={"command": "DC", "masked_pan": mask_pan(pan), "awk_key": awk_rec.key_identifier, "pvk_key": pvk_rec.key_identifier, "raw_command": raw_cmd},
+                sanitized_resp={"thales_response": tx.get("raw_response", ""), "pvv_matched": matched, "hsm_mode": self.mode},
+                status=status,
+                error_code=err,
+                duration_ms=dur,
+                transaction_id=transaction_id,
+            )
         pvk_ref, pvk_clear = self._resolve_key(pvk_id)
         _, awk_clear = self._resolve_key(awk_id)
 
-# [PATCH step07:hsm_pvv_instrumentation]
         try:
-            # Step 1: Ingest Encrypted PIN Block
-            record_crypto_step('VISA_PVV_VERIFY', 1, 'INGEST_PIN_BLOCK', key_id=awk_id, key_kcv=SoftHsmCryptoCore.calculate_kcv(awk_clear), raw_input=encrypted_pin_block, raw_output=encrypted_pin_block)
-            # Step 2: 3DES ECB Decrypt to clear ISO-0 block
+            record_crypto_step("VISA_PVV_VERIFY", 1, "INGEST_PIN_BLOCK", key_id=awk_id, key_kcv=SoftHsmCryptoCore.calculate_kcv(awk_clear), raw_input=encrypted_pin_block, raw_output=encrypted_pin_block)
             clear_block = SoftHsmCryptoCore.des3_ecb_hex(encrypted_pin_block, awk_clear, decrypt=True)
-            record_crypto_step('VISA_PVV_VERIFY', 2, 'DES3_DECRYPT_ISO0', key_id=awk_id, raw_input=encrypted_pin_block, raw_output=clear_block)
-            # Step 3: Extract Clear PIN
+            record_crypto_step("VISA_PVV_VERIFY", 2, "DES3_DECRYPT_ISO0", key_id=awk_id, raw_input=encrypted_pin_block, raw_output=clear_block)
             extracted_pin = SoftHsmCryptoCore.unpack_iso0_pin_block(encrypted_pin_block, pan, awk_clear)
-            record_crypto_step('VISA_PVV_VERIFY', 3, 'EXTRACT_CLEAR_PIN', raw_input=clear_block, raw_output=extracted_pin)
-            # Step 4: Construct TSP
+            record_crypto_step("VISA_PVV_VERIFY", 3, "EXTRACT_CLEAR_PIN", raw_input=clear_block, raw_output=extracted_pin)
             pan11 = pan[-12:-1]
-            tsp = f'{pan11}{pvki[0]}{extracted_pin[:4]}'
-            record_crypto_step('VISA_PVV_VERIFY', 4, 'CONSTRUCT_TSP', raw_input=f'PAN11:{pan11},PVKI:{pvki},PIN4:{extracted_pin[:4]}', raw_output=tsp)
-            # Step 5: PVK Encryption & Decimalization
+            tsp = f"{pan11}{pvki[0]}{extracted_pin[:4]}"
+            record_crypto_step("VISA_PVV_VERIFY", 4, "CONSTRUCT_TSP", raw_input=f"PAN11:{pan11},PVKI:{pvki},PIN4:{extracted_pin[:4]}", raw_output=tsp)
             calc_pvv = SoftHsmCryptoCore.calculate_visa_pvv(pan, extracted_pin, pvki, pvk_clear)
-            record_crypto_step('VISA_PVV_VERIFY', 5, 'CALCULATE_PVV', key_id=pvk_id, key_kcv=SoftHsmCryptoCore.calculate_kcv(pvk_clear), raw_input=tsp, raw_output=calc_pvv)
-            # Step 6: Compare against stored PVV
+            record_crypto_step("VISA_PVV_VERIFY", 5, "CALCULATE_PVV", key_id=pvk_id, key_kcv=SoftHsmCryptoCore.calculate_kcv(pvk_clear), raw_input=tsp, raw_output=calc_pvv)
             matched = calc_pvv == expected_pvv
-            status = 'APPROVED' if matched else 'DECLINED'
-            err = '00' if matched else '01'
-            thales_resp = f'0000DD{err}'
-            record_crypto_step('VISA_PVV_VERIFY', 6, 'COMPARE_PVV', raw_input=calc_pvv, expected_output=expected_pvv, status='PASSED' if matched else 'FAILED')
+            status = "APPROVED" if matched else "DECLINED"
+            err = "00" if matched else "01"
+            thales_resp = f"0000DD{err}"
+            record_crypto_step("VISA_PVV_VERIFY", 6, "COMPARE_PVV", raw_input=calc_pvv, expected_output=expected_pvv, status="PASSED" if matched else "FAILED")
         except Exception as exc:
             matched = False
             status = "ERROR"
@@ -369,7 +448,6 @@ class HSMAdapter:
         return self._record_operation(
             operation_type="PIN_PVV_VERIFY (Thales DC/DD)",
             key_ref=pvk_ref,
-# [PATCH step00_02:hsm_pvv_raw_trace]
             sanitized_req={
                 "command": "DC",
                 "masked_pan": mask_pan(pan),
@@ -399,6 +477,29 @@ class HSMAdapter:
         transaction_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
+        if self._is_external_mode():
+            from app.lmk_key_management_service import ExternalSoftHSMBridge
+            awk_rec = self._resolve_external_token(awk_id)
+            iwk_rec = self._resolve_external_token(iwk_id)
+            bridge = ExternalSoftHSMBridge()
+            pan12 = pan[-13:-1].zfill(12)
+            raw_cmd = f"0000CA{awk_rec.encrypted_key_block}{iwk_rec.encrypted_key_block}12{encrypted_pin_block}0101{pan12}"
+            tx = bridge.execute_command(raw_cmd, synthetic_mode=False)
+            err = tx.get("status_code", "15")
+            raw_resp = tx.get("raw_response", "")
+            dest_block = raw_resp[10:26] if (err == "00" and len(raw_resp) >= 26) else ""
+            status = "APPROVED" if err == "00" else "DECLINED"
+            dur = max(1, int((time.perf_counter() - t0) * 1000))
+            return self._record_operation(
+                operation_type="PIN_TRANSLATE (Thales CA/CB - External Soft-HSM)",
+                key_ref=awk_rec,
+                sanitized_req={"command": "CA", "masked_pan": mask_pan(pan), "source_key": awk_rec.key_identifier, "destination_key": iwk_rec.key_identifier},
+                sanitized_resp={"thales_response": raw_resp, "destination_pin_block_generated": bool(dest_block), "destination_pin_block": dest_block},
+                status=status,
+                error_code=err,
+                duration_ms=dur,
+                transaction_id=transaction_id,
+            )
         awk_ref, awk_clear = self._resolve_key(awk_id)
         _, iwk_clear = self._resolve_key(iwk_id)
 
@@ -420,7 +521,6 @@ class HSMAdapter:
                 "source_key": awk_id,
                 "destination_key": iwk_id,
             },
-# [PATCH step00_02:hsm_translate_raw_trace]
             sanitized_resp={
                 "thales_response": f"0000CB{err}",
                 "destination_pin_block_generated": bool(dest_block),
@@ -443,6 +543,37 @@ class HSMAdapter:
         transaction_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
+        if self._is_external_mode():
+            from app.lmk_key_management_service import ExternalSoftHSMBridge
+            cvk_rec = self._resolve_external_token(cvk_id)
+            bridge = ExternalSoftHSMBridge()
+            raw_cmd = f"0000CY{cvk_rec.encrypted_key_block}{pan};{expiry_yy_mm}{service_code}{supplied_cvv}"
+            tx = bridge.execute_command(raw_cmd, synthetic_mode=False)
+            err = tx.get("status_code", "15")
+            matched = err == "00"
+            status = "APPROVED" if matched else "DECLINED"
+            dur = max(1, int((time.perf_counter() - t0) * 1000))
+            return self._record_operation(
+                operation_type="CVV_VERIFY (Thales CY/CZ - External Soft-HSM)",
+                key_ref=cvk_rec,
+                sanitized_req={
+                    "command": "CY",
+                    "masked_pan": mask_pan(pan),
+                    "expiry": expiry_yy_mm,
+                    "service_code": service_code,
+                    "raw_command": raw_cmd,
+                },
+                sanitized_resp={
+                    "thales_response": tx.get("raw_response", ""),
+                    "cvv_matched": matched,
+                    "hsm_mode": self.mode,
+                },
+                status=status,
+                error_code=err,
+                duration_ms=dur,
+                transaction_id=transaction_id,
+            )
+
         cvk_ref, cvk_clear = self._resolve_key(cvk_id)
         calc_cvv = SoftHsmCryptoCore.calculate_cvv(pan, expiry_yy_mm, service_code, cvk_clear)
         matched = supplied_cvv in (calc_cvv, "011")
@@ -477,6 +608,34 @@ class HSMAdapter:
         transaction_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
+        if self._is_external_mode():
+            from app.lmk_key_management_service import ExternalSoftHSMBridge
+            tak_rec = self._resolve_external_token(tak_id)
+            bridge = ExternalSoftHSMBridge()
+            if supplied_mac:
+                raw_cmd = f"0000M801{tak_rec.encrypted_key_block}{data_hex}{supplied_mac[:8].upper()}"
+                cmd_label = "M8/M9"
+            else:
+                raw_cmd = f"0000M601{tak_rec.encrypted_key_block}{data_hex}"
+                cmd_label = "M6/M7"
+            tx = bridge.execute_command(raw_cmd, synthetic_mode=False)
+            err = tx.get("status_code", "15")
+            raw_resp = tx.get("raw_response", "")
+            matched = err == "00"
+            status = "APPROVED" if matched else "DECLINED"
+            calc_mac = raw_resp[8:16] if (not supplied_mac and len(raw_resp) >= 16) else (supplied_mac or "")
+            dur = max(1, int((time.perf_counter() - t0) * 1000))
+            return self._record_operation(
+                operation_type=f"MAC_OPERATION (Thales {cmd_label} - External Soft-HSM)",
+                key_ref=tak_rec,
+                sanitized_req={"command": cmd_label, "data_length_bytes": len(data_hex) // 2, "key": tak_rec.key_identifier, "raw_command": raw_cmd},
+                sanitized_resp={"thales_response": raw_resp, "calculated_mac": calc_mac, "mac_matched": matched, "hsm_mode": self.mode},
+                status=status,
+                error_code=err,
+                duration_ms=dur,
+                transaction_id=transaction_id,
+            )
+
         tak_ref, tak_clear = self._resolve_key(tak_id)
         calc_mac = SoftHsmCryptoCore.retail_mac_hex(data_hex, tak_clear)
         if supplied_mac:
@@ -512,6 +671,48 @@ class HSMAdapter:
         transaction_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         t0 = time.perf_counter()
+        if self._is_external_mode():
+            from app.lmk_key_management_service import ExternalSoftHSMBridge
+            mk_rec = self._resolve_external_token(mk_ac_id)
+            bridge = ExternalSoftHSMBridge()
+            tags = SoftHsmCryptoCore.parse_de55(de55_hex)
+            tag_map = {t["tag"]: t["value"] for t in tags}
+            atc = tag_map.get("9F36", "0001").zfill(4)
+            un = tag_map.get("9F37", "11223344").zfill(8)
+            psn_val = tag_map.get("5F34", psn).zfill(2)[-2:]
+            arqc_received = tag_map.get("9F26", "78410FF36867740F")
+            cdol_order = ["9F02", "9F03", "9F1A", "95", "5F2A", "9A", "9C", "9F37", "82", "9F36"]
+            cdol_data = "".join(tag_map.get(c, "") for c in cdol_order)
+            padded = cdol_data + "80"
+            while len(padded) % 16 != 0:
+                padded += "00"
+            pan_seq_16 = (pan + psn_val)[-16:].zfill(16)
+            tx_len_hex = f"{len(padded) // 2:02X}"
+            raw_cmd = f"0000KQ10{mk_rec.encrypted_key_block}{pan_seq_16}{atc}{un}{tx_len_hex}{padded};{arqc_received};{arc_hex}"
+            tx = bridge.execute_command(raw_cmd, synthetic_mode=False)
+            err = tx.get("status_code", "15")
+            raw_resp = tx.get("raw_response", "")
+            arpc = raw_resp[8:24] if (err == "00" and len(raw_resp) >= 24) else ""
+            verified = err == "00"
+            status = "APPROVED" if verified else "DECLINED"
+            dur = max(1, int((time.perf_counter() - t0) * 1000))
+            return self._record_operation(
+                operation_type="EMV_ARQC_ARPC (Thales KQ/KR - External Soft-HSM)",
+                key_ref=mk_rec,
+                sanitized_req={"command": "KQ", "masked_pan": mask_pan(pan), "psn": psn_val, "mk_ac": mk_rec.key_identifier, "raw_command": raw_cmd},
+                sanitized_resp={
+                    "thales_response": raw_resp,
+                    "arqc_verified": verified,
+                    "arpc_generated": arpc,
+                    "tag_91": f"{arpc}{arc_hex}" if arpc else "",
+                    "hsm_mode": self.mode,
+                },
+                status=status,
+                error_code=err,
+                duration_ms=dur,
+                transaction_id=transaction_id,
+            )
+
         mk_ref, mk_clear = self._resolve_key(mk_ac_id)
         try:
             res = SoftHsmCryptoCore.verify_emv_arqc_and_build_arpc(mk_clear, pan, psn, de55_hex, arc_hex)
@@ -543,6 +744,10 @@ class HSMAdapter:
 
     def check_key_kvc(self, key_identifier: str) -> Dict[str, Any]:
         t0 = time.perf_counter()
+        if self._is_external_mode():
+            from app.lmk_key_management_service import LMKKeyManagementService
+            svc = LMKKeyManagementService(self.db)
+            return svc.verify_key_kcv_via_soft_hsm_bu(key_identifier)
         key_ref, clear_key = self._resolve_key(key_identifier)
         kcv = SoftHsmCryptoCore.calculate_kcv(clear_key)
         dur = max(1, int((time.perf_counter() - t0) * 1000))

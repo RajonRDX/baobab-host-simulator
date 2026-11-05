@@ -1,0 +1,43 @@
+import axios from 'axios';
+import { getToken } from '../api';
+
+const HOST_BACKEND_URL = (import.meta as any).env?.VITE_HOST_API_URL || 'http://127.0.0.1:8000';
+
+export const api = axios.create({
+  baseURL: HOST_BACKEND_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+api.interceptors.request.use((config) => {
+  const token =
+    getToken() ||
+    sessionStorage.getItem('BAOBAB_AUTH_TOKEN') ||
+    localStorage.getItem('BAOBAB_AUTH_TOKEN') ||
+    sessionStorage.getItem('token') ||
+    localStorage.getItem('token');
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  if (config.url && !config.url.startsWith('/api') && !config.url.startsWith('http')) {
+    config.url = `/api${config.url.startsWith('/') ? '' : '/'}${config.url}`;
+  }
+
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      sessionStorage.removeItem('BAOBAB_AUTH_TOKEN');
+      window.location.hash = '#/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
+export default api;

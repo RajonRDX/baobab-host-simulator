@@ -1,3 +1,4 @@
+import { HsmAuthoritySimulatorBar } from '../components/HsmAuthoritySimulatorBar';
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Activity,
@@ -611,6 +612,7 @@ export const TransactionLogViewerPage: React.FC = () => {
 
   return (
     <div className="space-y-4 text-slate-100">
+      <HsmAuthoritySimulatorBar />
       {/* HEADER BAR */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 bg-slate-900/90 border border-slate-800 rounded-xl p-4 shadow-lg">
         <div>

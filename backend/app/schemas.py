@@ -922,3 +922,54 @@ class PanRoutingRuleOut(BaseModel):
     updated_at: datetime
     model_config = ConfigDict(from_attributes=True)
 
+
+
+# [PATCH lmk_centric_key_mgmt:schemas]
+class ExternalKeyGenerateRequest(BaseModel):
+    key_identifier: str = Field(..., min_length=2, max_length=120, description="Host key alias, e.g. ZPK_EXT_ISS_01")
+    key_name: str = Field("External Soft-HSM Key", max_length=100)
+    key_type: str = Field("ZPK", description="Logical type: ZMK, TMK, ZPK, TPK, PVK, CVK, TAK, ZAK, BDK, MK-AC, ZEK, DEK, TEK")
+    thales_key_type_code: Optional[str] = Field(None, description="Explicit 3-char Thales key type: 000, 001, 002, 003, 008, 009, 109, 402, 00A, 00B")
+    key_usage: Optional[str] = Field(None, description="Usage description or TR-31 usage code")
+    key_scheme: str = Field("U", description="LMK encryption scheme: U (Double 3DES), T (Triple 3DES), S (Thales Key Block), Z (Single DES)")
+    mode: str = Field("0", description="A0 Mode: '0' = Generate under LMK only, '1' = Generate + Export under ZMK/TMK")
+    export_zmk_key_identifier: Optional[str] = Field(None, description="When mode='1', alias of ZMK/TMK in Host DB")
+    export_scheme: str = Field("U", description="Export scheme under ZMK/TMK when mode='1'")
+    is_tmk_export: bool = Field(False, description="True to set ';1' TMK flag on A0 mode 1 export")
+    lmk_id: str = Field("00", description="2-digit Thales LMK slot identifier")
+    institution_id: Optional[str] = None
+    processing_system_id: Optional[str] = None
+
+
+class ExternalKeyImportRequest(BaseModel):
+    key_identifier: str = Field(..., min_length=2, max_length=120, description="Alias for imported key")
+    key_name: str = Field("Imported Soft-HSM Key", max_length=100)
+    key_type: str = Field("ZPK")
+    thales_key_type_code: Optional[str] = Field(None, description="3-char Thales key type, e.g. 001, 002, 003, 402, 109")
+    key_usage: Optional[str] = None
+    zmk_key_identifier: str = Field(..., description="Alias of LMK-protected ZMK/TMK in Host DB")
+    encrypted_key_under_zmk: str = Field(..., min_length=16, description="Working key encrypted under ZMK (e.g. U + 32H)")
+    key_scheme_lmk: str = Field("U", description="Target LMK scheme: U, T, or S")
+    is_tmk: bool = Field(False, description="True if wrapping key is a TMK (;1)")
+    lmk_id: str = Field("00")
+    institution_id: Optional[str] = None
+    processing_system_id: Optional[str] = None
+
+
+class ExternalKeyExportRequest(BaseModel):
+    key_identifier: str = Field(..., description="Alias of working key protected under Soft-HSM LMK")
+    zmk_key_identifier: str = Field(..., description="Alias of ZMK/TMK protected under Soft-HSM LMK")
+    export_scheme: str = Field("U", description="Key scheme under ZMK/TMK: U, T, X, Y, 0")
+    is_tmk: bool = Field(False, description="True if exporting under TMK (;1)")
+    lmk_id: str = Field("00")
+
+
+class ExternalKeyRotateRequest(BaseModel):
+    key_identifier: str = Field(..., description="Existing key alias to rotate via Soft-HSM A0")
+    new_key_scheme: Optional[str] = None
+    export_zmk_key_identifier: Optional[str] = None
+
+
+class HsmProviderSwitchRequest(BaseModel):
+    provider_mode: str = Field(..., description="'INTERNAL_HSM' (SOFT_HSM_LOCAL) or 'EXTERNAL_HSM' (SOFT_HSM_REMOTE)")
+    remote_url: Optional[str] = Field(None, description="Base URL or /api/host/command URL of External Soft-HSM")

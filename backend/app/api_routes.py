@@ -904,21 +904,17 @@ def create_card(payload: CardCreate, db: Session = Depends(get_db), current_user
         xbank = db.query(Institution).filter(Institution.institution_code == 'XBANK').first()
         inst_id = xbank.id if xbank else None
 
-    # Resolve PVK from database or SoftHsmCryptoCore
-    pvk_rec = db.query(HsmKeyReference).filter(HsmKeyReference.key_identifier == 'PVK_VISA_01').first()
-    pvk_clear = (pvk_rec.clear_key_hex if (pvk_rec and pvk_rec.clear_key_hex) else SoftHsmCryptoCore.INTERNAL_CLEAR_KEYS.get('PVK_VISA_01', '5566778899AABBCC5566778899AABBCC'))
-
+    hsm_adapter = HSMAdapter(db)
     raw_pin = (payload.pin or '').strip()
     if raw_pin and raw_pin.isdigit() and len(raw_pin) >= 4:
-        calculated_pvv = SoftHsmCryptoCore.calculate_visa_pvv(payload.test_pan_reference, raw_pin, '1', pvk_clear)
+        calculated_pvv = hsm_adapter.generate_pin_pvv(payload.test_pan_reference, raw_pin, '1', 'PVK_VISA_01')
     elif payload.pvv_or_offset and payload.pvv_or_offset != '7821':
         calculated_pvv = payload.pvv_or_offset
     else:
-        calculated_pvv = SoftHsmCryptoCore.calculate_visa_pvv(payload.test_pan_reference, '1234', '1', pvk_clear)
+        calculated_pvv = hsm_adapter.generate_pin_pvv(payload.test_pan_reference, '1234', '1', 'PVK_VISA_01')
 
     exp_yy_mm = f"{str(payload.expiry_year)[-2:]}{payload.expiry_month:02d}"
-    cvk_clear = SoftHsmCryptoCore.INTERNAL_CLEAR_KEYS.get('CVK_MAIN_01', '5566778899AABBCC5566778899AABBCC')
-    calculated_cvv = SoftHsmCryptoCore.calculate_cvv(payload.test_pan_reference, exp_yy_mm, '101', cvk_clear)
+    calculated_cvv = hsm_adapter.generate_card_cvv(payload.test_pan_reference, exp_yy_mm, '101', 'CVK_MAIN_01')
 
     card = Card(
         customer_id=payload.customer_id,
@@ -2038,15 +2034,23 @@ def get_transaction_details(transaction_id: str, db: Session = Depends(get_db), 
 # ==============================================================================
 
 # [PATCH api_routes_hsm_keys_short_bank_code]
+# [PATCH lmk_centric_key_mgmt:list_hsm_keys_safe]
 @router.get("/hsm/keys")
-def list_hsm_keys(db: Session = Depends(get_db), _: str = Depends(get_current_user)):
-    keys = db.query(HsmKeyReference).order_by(HsmKeyReference.created_at.asc()).all()
+def list_hsm_keys(
+    provider_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _: str = Depends(get_current_user),
+):
+    from app.lmk_key_management_service import LMKKeyManagementService
+    q = db.query(HsmKeyReference)
+    if provider_type and provider_type.upper() in ("INTERNAL_HSM", "EXTERNAL_HSM"):
+        q = q.filter(HsmKeyReference.provider_type == provider_type.upper())
+    keys = q.order_by(HsmKeyReference.created_at.asc()).all()
     out = []
     for k in keys:
-        d = HsmKeyReferenceOut.model_validate(k).model_dump()
-        d["institution_id"] = k.institution_id
+        d = LMKKeyManagementService.serialize_key_safe(k)
+        d["hsm_key_reference"] = k.hsm_key_reference
         d["institution_code"] = _short_bank_code(k.institution, "ITCL") if k.institution else "ITCL"
-        d["processing_system_id"] = k.processing_system_id
         out.append(d)
     return out
 

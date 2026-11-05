@@ -371,6 +371,19 @@ class HsmKeyReference(Base):
     key_length: Mapped[int] = mapped_column(Integer, nullable=False, default=128)
     hsm_key_reference: Mapped[str] = mapped_column(String(200), nullable=False)  # Protected LMK cryptogram or slot ref
     key_status: Mapped[str] = mapped_column(String(20), nullable=False, default="ACTIVE")
+# [PATCH lmk_centric_key_mgmt:hsm_key_columns]
+    provider_type: Mapped[str] = mapped_column(String(30), nullable=False, default="INTERNAL_HSM", index=True)
+    thales_key_type_code: Mapped[str] = mapped_column(String(10), nullable=False, default="001")
+    key_scheme: Mapped[str] = mapped_column(String(10), nullable=False, default="U")
+    key_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    lmk_id: Mapped[str] = mapped_column(String(10), nullable=False, default="00")
+    lmk_check_value: Mapped[Optional[str]] = mapped_column(String(32), index=True)
+    encrypted_key_block: Mapped[Optional[str]] = mapped_column(String(256))
+    kcv_type: Mapped[str] = mapped_column(String(10), nullable=False, default="6H")
+    exportable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    rotated_from_key_id: Mapped[Optional[str]] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 # [PATCH step10:hsm_key_ceremony_columns]
     clear_key_hex: Mapped[Optional[str]] = mapped_column(String(64))
     parent_key_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey('hsm_key_references.id'), index=True)

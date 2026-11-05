@@ -126,3 +126,9 @@ Tracks database tables, columns, API routes, schemas, settings, and React routes
 - Balance edit via existing **PUT /api/accounts/{id}** (`available_balance`, `ledger_balance`).
 - PIN change via existing **POST /api/cards/{id}/pin**.
 
+<!-- CONTRACT:simulator_workbench_v2 -->
+## `simulator_workbench_v2` - Simulator workbench
+- **Table**: `simulator_saved_cases` (id, name unique, description, mti, transaction_code, clear_pin_helper, fields JSON, enabled_fields JSON, created_at, updated_at)
+- **GET /api/simulator-workbench/next-ids**: last STAN/RRN in `transactions` and the next free values
+- **GET/POST /api/simulator-workbench/cases**, **GET/PUT/DELETE /api/simulator-workbench/cases/{id}**: saved simulator cases (POST returns 409 for a duplicate name unless `overwrite` is true)
+- **Browser storage**: key `BAOBAB_SIMULATOR_STATE_V2` (localStorage) holds the last simulator session

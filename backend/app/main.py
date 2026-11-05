@@ -9,6 +9,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api_routes import router
 from app.routers.institutions_router import router as institutions_router
+# [PATCH lmk_centric_key_mgmt:main_router]
+from app.routers.lmk_key_management_router import router as lmk_key_management_router
 # [PATCH tx_log_viewer_v2:main_router_import]
 from app.routers.transaction_logs_router import (
     router as transaction_logs_router,
@@ -54,8 +56,12 @@ app.add_middleware(
 
 app.include_router(router)
 app.include_router(institutions_router)
+app.include_router(lmk_key_management_router)
 # [PATCH tx_log_viewer_v2:main_include_router]
 app.include_router(transaction_logs_router)
+# [PATCH simulator_workbench_v2:main_router]
+from app.simulator_workbench_router import router as simulator_workbench_router
+app.include_router(simulator_workbench_router)
 
 
 @app.get("/health")
