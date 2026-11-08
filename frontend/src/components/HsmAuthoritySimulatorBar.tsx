@@ -7,7 +7,7 @@ interface HsmAuthorityBadgeProps {
 
 export const HsmAuthoritySimulatorBar: React.FC<HsmAuthorityBadgeProps> = ({ onProviderChange }) => {
   const [status, setStatus] = useState<any>(null);
-  const [remoteUrl, setRemoteUrl] = useState<string>('http://127.0.0.1:8001');
+  const [remoteUrl, setRemoteUrl] = useState<string>('https://thales-10k-soft-hsm.onrender.com');
   const [switching, setSwitching] = useState<boolean>(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
@@ -75,7 +75,7 @@ export const HsmAuthoritySimulatorBar: React.FC<HsmAuthorityBadgeProps> = ({ onP
               HSM Engine:{' '}
               <span className={isExternal ? 'text-emerald-400' : 'text-sky-400'}>
                 {isExternal
-                  ? 'EXTERNAL SOFT-HSM (Port 8001 · Thales payShield 10K Wire Format)'
+                  ? 'EXTERNAL SOFT-HSM (Port Remote Soft-HSM · Thales payShield 10K Wire Format)'
                   : 'INTERNAL SIMULATOR HSM (Local In-Memory Format)'}
               </span>
             </span>
@@ -116,7 +116,7 @@ export const HsmAuthoritySimulatorBar: React.FC<HsmAuthorityBadgeProps> = ({ onP
               : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
-          External Soft-HSM (:8001)
+          External Soft-HSM (:Remote Soft-HSM)
         </button>
       </div>
     </div>

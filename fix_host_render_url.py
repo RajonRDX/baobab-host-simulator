@@ -322,7 +322,7 @@ def patch_lmk_router(path: Path) -> None:
     backup_file(path)
     text = path.read_text(encoding="utf-8")
     # Replace any localhost default in router with Render URL
-    text = text.replace("http://127.0.0.1:8001/api/host/command", RENDER_HSM_CMD_URL)
+    text = text.replace("https://thales-10k-soft-hsm.onrender.com/api/host/command", RENDER_HSM_CMD_URL)
     text = text.replace("http://127.0.0.1:8000", RENDER_HSM_BASE)
     if "seed_fallback_external_keys" not in text:
         text = text.replace(

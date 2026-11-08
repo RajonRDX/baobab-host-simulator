@@ -41,7 +41,7 @@ def main():
                 return window.VITE_API_BASE_URL.replace(/\\/+$/, "");
             }
             if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-                return "http://127.0.0.1:8001";
+                return "https://thales-10k-soft-hsm.onrender.com";
             }
             return "";
         }'''

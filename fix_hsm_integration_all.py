@@ -351,7 +351,7 @@ interface HsmAuthorityBadgeProps {
 
 export const HsmAuthoritySimulatorBar: React.FC<HsmAuthorityBadgeProps> = ({ onProviderChange }) => {
   const [status, setStatus] = useState<any>(null);
-  const [remoteUrl, setRemoteUrl] = useState<string>('http://127.0.0.1:8001');
+  const [remoteUrl, setRemoteUrl] = useState<string>('https://thales-10k-soft-hsm.onrender.com');
   const [switching, setSwitching] = useState<boolean>(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
@@ -512,11 +512,11 @@ def patch_host_simulator():
         cfg_text = config_py.read_text(encoding="utf-8", errors="ignore").replace("\xa0", " ")
         cfg_text = re.sub(
             r'HSM_REMOTE_URL:\s*str\s*=\s*"[^"]*"',
-            'HSM_REMOTE_URL: str = "http://127.0.0.1:8001/api/host/command"',
+            'HSM_REMOTE_URL: str = "https://thales-10k-soft-hsm.onrender.com/api/host/command"',
             cfg_text,
         )
         config_py.write_text(cfg_text, encoding="utf-8")
-        print("  [+] Cleaned & pointed backend/app/config.py HSM_REMOTE_URL -> http://127.0.0.1:8001/api/host/command")
+        print("  [+] Cleaned & pointed backend/app/config.py HSM_REMOTE_URL -> https://thales-10k-soft-hsm.onrender.com/api/host/command")
 
 if __name__ == "__main__":
     print("==================================================================")
