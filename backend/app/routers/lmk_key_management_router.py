@@ -116,20 +116,9 @@ def switch_hsm_provider(
     db: Session = Depends(get_db),
     _: str = Depends(get_current_user),
 ):
-    mode_in = payload.provider_mode.upper().strip()
-    if mode_in in ("EXTERNAL_HSM", "SOFT_HSM_REMOTE"):
-        settings.HSM_MODE = "SOFT_HSM_REMOTE"
-    elif mode_in in ("INTERNAL_HSM", "SOFT_HSM_LOCAL"):
-        settings.HSM_MODE = "SOFT_HSM_LOCAL"
-    else:
-        raise HTTPException(status_code=400, detail="provider_mode must be 'INTERNAL_HSM' or 'EXTERNAL_HSM'")
-
-    if payload.remote_url:
-        settings.HSM_REMOTE_URL = payload.remote_url.strip()
-
-    svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
-    return svc.get_lmk_and_provider_status()
+    return _execute_safe_provider_switch(
+        {"provider_mode": payload.provider_mode, "remote_url": payload.remote_url}, db
+    )
 
 
 @router.get("/keys")
@@ -257,75 +246,93 @@ def rotate_external_key_a0(
         raise HTTPException(status_code=400, detail=str(ve))
 
 
+# [PATCH provider_switch_fast]
 def _execute_safe_provider_switch(payload: Dict[str, Any], db: Session) -> Dict[str, Any]:
+    """
+    Fast, always-answering provider switch used by /provider and the universal routes.
+    No long remote chains: local seed + one short probe of the Soft-HSM (which also wakes Render).
+    """
+    import json as _json
+    import logging as _logging
+    import urllib.request as _urlreq
+
+    log = _logging.getLogger("baobab.host")
     raw_target = (
-        payload.get("provider_type")
+        payload.get("provider_mode")
+        or payload.get("provider_type")
         or payload.get("provider")
         or payload.get("hsm_mode")
         or payload.get("mode")
         or payload.get("target_provider")
-        or "INTERNAL_HSM"
+        or ""
     )
     target = str(raw_target).upper().strip()
-
     if any(k in target for k in ("EXT", "REMOTE", "THALES", "CLOUD")):
         settings.HSM_MODE = "SOFT_HSM_REMOTE"
         active_provider = "EXTERNAL_HSM"
-    else:
+    elif any(k in target for k in ("INT", "LOCAL")):
         settings.HSM_MODE = "SOFT_HSM_LOCAL"
         active_provider = "INTERNAL_HSM"
+    else:
+        raise HTTPException(status_code=400, detail="provider_mode must be 'INTERNAL_HSM' or 'EXTERNAL_HSM'")
 
-    try:
-        from app.models import HostParameter
-        hp = db.query(HostParameter).filter(HostParameter.parameter_name == "HSM_MODE").first()
-        if hp:
-            hp.parameter_value = {"mode": settings.HSM_MODE, "provider_type": active_provider}
-            db.commit()
-    except Exception:
-        db.rollback()
-
-    try:
-        from app.seed_data import seed_external_hsm_keys_if_needed
-        seed_external_hsm_keys_if_needed(db)
-    except Exception:
-        pass
+    remote_url = payload.get("remote_url")
+    if remote_url:
+        settings.HSM_REMOTE_URL = str(remote_url).strip()
 
     svc = LMKKeyManagementService(db)
     try:
-        if active_provider == "EXTERNAL_HSM":
-            svc.seed_fallback_external_keys()
-            svc.sync_default_external_keys("admin")
+        svc.seed_fallback_external_keys()  # local only, never overwrites real tokens
     except Exception:
-        pass
+        db.rollback()
+        log.exception("seed_fallback_external_keys failed during provider switch")
 
+    counts = {"internal_keys": 0, "external_keys": 0}
     try:
-        status_info = svc.get_lmk_and_provider_status()
-        status_info["online"] = True
-        status_info["active_provider"] = active_provider
-        status_info["hsm_mode"] = settings.HSM_MODE
+        counts["internal_keys"] = db.query(HsmKeyReference).filter(HsmKeyReference.provider_type == "INTERNAL_HSM").count()
+        counts["external_keys"] = db.query(HsmKeyReference).filter(HsmKeyReference.provider_type == "EXTERNAL_HSM").count()
     except Exception:
-        status_info = {
-            "active_provider": active_provider,
-            "hsm_mode": settings.HSM_MODE,
-            "online": True,
-            "hsm_state": "AUTHORIZED_ONLINE",
-            "lmk_id": "00",
-            "lmk_check_value": "D3B82A0000000000" if active_provider == "EXTERNAL_HSM" else "A1B2C30000000000",
-            "lmk_kcv_short": "D3B82A" if active_provider == "EXTERNAL_HSM" else "A1B2C3",
-            "firmware": "1347-0900",
-            "remote_url": settings.HSM_REMOTE_URL,
-            "key_counts": {"internal_keys": 8, "external_keys": 8, "lmk_domain_mismatched_keys": 0},
-        }
+        db.rollback()
 
+    if active_provider == "INTERNAL_HSM":
+        status_info = svc.get_lmk_and_provider_status()  # no network in internal mode
+    else:
+        online, remote, warning = False, {}, None
+        try:
+            req = _urlreq.Request(
+                svc.bridge.status_url,
+                headers={"Accept": "application/json", "User-Agent": "BAOBAB-Host-Simulator/1.0"},
+                method="GET",
+            )
+            with _urlreq.urlopen(req, timeout=8) as resp:
+                remote = _json.loads(resp.read().decode("utf-8"))
+                online = True
+        except Exception as exc:
+            warning = f"External Soft-HSM did not answer in 8s (Render may be waking up): {exc}"
+            log.warning(warning)
+        lmk_cv = remote.get("lmk_check_value") or ("D3B82A0000000000" if online else "UNREACHABLE")
+        status_info = {
+            "active_provider": "EXTERNAL_HSM",
+            "hsm_mode": settings.HSM_MODE,
+            "online": online,
+            "hsm_state": remote.get("hsm_state", "AUTHORIZED_ONLINE" if online else "OFFLINE_UNREACHABLE"),
+            "lmk_id": "00",
+            "lmk_check_value": lmk_cv,
+            "lmk_kcv_short": lmk_cv[:6],
+            "firmware": remote.get("firmware", "N/A"),
+            "remote_url": svc.bridge.execute_url,
+            "key_counts": counts,
+        }
+        if warning:
+            status_info["warning"] = warning
+
+    status_info["active_provider"] = active_provider
+    status_info["hsm_mode"] = settings.HSM_MODE
     return {
         "status": "OK",
         "switched": True,
-        "active_provider": active_provider,
         "provider_type": active_provider,
-        "hsm_mode": settings.HSM_MODE,
-        "online": True,
-        "lmk_check_value": status_info.get("lmk_check_value", "D3B82A0000000000"),
-        "lmk_kcv_short": status_info.get("lmk_kcv_short", "D3B82A"),
-        "provider_status": status_info,
         **status_info,
     }
+
+

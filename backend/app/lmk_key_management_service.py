@@ -347,40 +347,57 @@ class LMKKeyManagementService:
                 "key_counts": {"internal_keys": internal_count, "external_keys": external_count},
             }
 
+    # [PATCH provider_switch_fast]
+    # LMK cryptograms copied from the live Soft-HSM (your own logs). All other keys are
+    # filled with the real tokens by "Sync Keys" (GET /api/keys), never by guesses.
+    _KNOWN_GOOD_TOKENS = {
+        "AWK_ATM_01_EXT": ("UC8E2A847DA7EC2F0C8E2A847DA7EC2F0", None),
+        "PVK_VISA_01_EXT": ("U56D33BE3768CF6DD56D33BE3768CF6DD", "141C6A"),
+    }
+
     def seed_fallback_external_keys(self) -> List[str]:
-        remote_map: Dict[str, Dict[str, Any]] = {}
-        try:
-            for rk in self.bridge.fetch_seeded_remote_keys():
-                rk_id = rk.get("key_id") or ""
-                if rk_id:
-                    remote_map[rk_id] = rk
-        except Exception:
-            pass
-
-        alias_to_remote = {
-            "ZMK_MAIN_EXT": "ZMK_MAIN",
-            "TMK_POS_01_EXT": "TMK_POS_01",
-            "AWK_ATM_01_EXT": "AWK_ATM_01",
-            "IWK_SW_01_EXT": "IWK_SW_01",
-            "PVK_VISA_01_EXT": "PVK_VISA_01",
-            "MK_AC_EMV01_EXT": "MK_AC_EMV01",
-            "CVK_MAIN_01_EXT": "CVK_ISS_01",
-            "TAK_MAC_01_EXT": "TAK_MAC_01",
-        }
-
+        """
+        LOCAL ONLY (no HTTP call) and NON-DESTRUCTIVE:
+          * creates a missing EXTERNAL_HSM row,
+          * never overwrites a token that was synced from the real Soft-HSM,
+          * only replaces an old placeholder token for AWK/PVK with the verified one.
+        """
+        placeholder = {i["key_identifier"]: i["encrypted_key_block"] for i in DEFAULT_EXTERNAL_HSM_KEYS}
         seeded_aliases: List[str] = []
         for item in DEFAULT_EXTERNAL_HSM_KEYS:
             ext_alias = item["key_identifier"]
-            rem_key = remote_map.get(alias_to_remote.get(ext_alias, ""))
-            token = (rem_key.get("lmk_cryptogram") if rem_key else None) or item["encrypted_key_block"]
-            kvc_val = (rem_key.get("kcv") if rem_key else None) or item["kvc"]
+            good_token, good_kvc = self._KNOWN_GOOD_TOKENS.get(ext_alias, (None, None))
+            token = good_token or item["encrypted_key_block"]
+            kvc_val = good_kvc or item["kvc"]
 
             rec = (
                 self.db.query(HsmKeyReference)
                 .filter(HsmKeyReference.key_identifier == ext_alias)
                 .first()
             )
-            if rec:
+            if rec is None:
+                self.db.add(
+                    HsmKeyReference(
+                        key_name=item["key_name"],
+                        key_type=item["key_type"],
+                        key_usage=item["key_usage"],
+                        key_identifier=ext_alias,
+                        kvc=kvc_val,
+                        algorithm="3DES_2KEY",
+                        key_length=128,
+                        hsm_key_reference=token,
+                        encrypted_key_block=token,
+                        clear_key_hex=None,
+                        provider_type="EXTERNAL_HSM",
+                        thales_key_type_code=item["thales_key_type_code"],
+                        key_scheme=item["key_scheme"],
+                        key_version=1,
+                        lmk_id="00",
+                        lmk_check_value=item["lmk_check_value"],
+                        key_status="ACTIVE",
+                    )
+                )
+            elif rec.provider_type != "EXTERNAL_HSM":
                 rec.provider_type = "EXTERNAL_HSM"
                 rec.encrypted_key_block = token
                 rec.hsm_key_reference = token
@@ -391,27 +408,10 @@ class LMKKeyManagementService:
                 rec.lmk_check_value = item["lmk_check_value"]
                 rec.clear_key_hex = None
                 rec.key_status = "ACTIVE"
-            else:
-                rec = HsmKeyReference(
-                    key_name=item["key_name"],
-                    key_type=item["key_type"],
-                    key_usage=item["key_usage"],
-                    key_identifier=ext_alias,
-                    kvc=kvc_val,
-                    algorithm="3DES_2KEY",
-                    key_length=128,
-                    hsm_key_reference=token,
-                    encrypted_key_block=token,
-                    clear_key_hex=None,
-                    provider_type="EXTERNAL_HSM",
-                    thales_key_type_code=item["thales_key_type_code"],
-                    key_scheme=item["key_scheme"],
-                    key_version=1,
-                    lmk_id="00",
-                    lmk_check_value=item["lmk_check_value"],
-                    key_status="ACTIVE",
-                )
-                self.db.add(rec)
+            elif good_token and rec.encrypted_key_block == placeholder.get(ext_alias):
+                rec.encrypted_key_block = good_token
+                rec.hsm_key_reference = good_token
+                rec.kvc = kvc_val
             seeded_aliases.append(ext_alias)
 
         self.db.commit()
