@@ -70,7 +70,8 @@ from typing import Any, Dict
 from fastapi import Body, Depends
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.routers.lmk_key_management_router import _execute_safe_provider_switch
+from app.config import settings
+from app.lmk_key_management_service import LMKKeyManagementService
 
 @app.post("/api/hsm/lmk/provider")
 @app.put("/api/hsm/lmk/provider")
