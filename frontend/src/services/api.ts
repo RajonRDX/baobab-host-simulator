@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { getToken } from '../api';
 
-const HOST_BACKEND_URL = (import.meta as any).env?.VITE_HOST_API_URL || 'http://127.0.0.1:8000';
+const HOST_BACKEND_URL = (import.meta as any).env?.VITE_HOST_API_URL || '';  // [PATCH same_origin_api]
 
 export const api = axios.create({
   baseURL: HOST_BACKEND_URL,
