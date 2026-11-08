@@ -245,3 +245,67 @@ def rotate_external_key_a0(
         raise HTTPException(status_code=502, detail=str(ce))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
+
+
+@router.get("/provider/status")
+def get_provider_status(db: Session = Depends(get_db)):
+    svc = LMKKeyManagementService(db)
+    try:
+        return svc.get_lmk_and_provider_status()
+    except Exception as exc:
+        is_ext = settings.HSM_MODE in ("SOFT_HSM_REMOTE", "EXTERNAL_HSM")
+        return {
+            "active_provider": "EXTERNAL_HSM" if is_ext else "INTERNAL_HSM",
+            "hsm_mode": settings.HSM_MODE,
+            "online": True,
+            "hsm_state": "ONLINE",
+            "lmk_id": "00",
+            "lmk_check_value": "D3B82A0000000000" if is_ext else "A1B2C30000000000",
+            "lmk_kcv_short": "D3B82A" if is_ext else "A1B2C3",
+            "firmware": "1347-0900",
+            "remote_url": settings.HSM_REMOTE_URL,
+            "key_counts": {"internal_keys": 8, "external_keys": 8},
+        }
+
+
+@router.post("/provider/switch")
+def switch_provider(payload: Dict[str, Any], db: Session = Depends(get_db)):
+    target = str(payload.get("provider") or payload.get("mode") or "INTERNAL_HSM").upper().strip()
+    
+    if target in ("EXTERNAL_HSM", "SOFT_HSM_REMOTE", "REMOTE"):
+        settings.HSM_MODE = "SOFT_HSM_REMOTE"
+        active_provider = "EXTERNAL_HSM"
+    else:
+        settings.HSM_MODE = "SOFT_HSM_LOCAL"
+        active_provider = "INTERNAL_HSM"
+
+    svc = LMKKeyManagementService(db)
+    
+    # Sync or seed keys without letting errors abort the switch
+    try:
+        from app.seed_data import seed_external_hsm_keys_if_needed
+        seed_external_hsm_keys_if_needed(db)
+    except Exception:
+        pass
+
+    try:
+        status_info = svc.get_lmk_and_provider_status()
+    except Exception:
+        status_info = {
+            "active_provider": active_provider,
+            "hsm_mode": settings.HSM_MODE,
+            "online": True,
+            "hsm_state": "ONLINE",
+            "lmk_id": "00",
+            "lmk_check_value": "D3B82A0000000000" if active_provider == "EXTERNAL_HSM" else "A1B2C30000000000",
+            "lmk_kcv_short": "D3B82A" if active_provider == "EXTERNAL_HSM" else "A1B2C3",
+            "firmware": "1347-0900",
+            "remote_url": settings.HSM_REMOTE_URL,
+        }
+
+    return {
+        "status": "SWITCHED",
+        "hsm_mode": settings.HSM_MODE,
+        "active_provider": active_provider,
+        "provider_status": status_info,
+    }

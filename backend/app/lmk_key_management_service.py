@@ -888,7 +888,10 @@ class LMKKeyManagementService:
         key_identifier: str,
         expected_lmk_kcv: Optional[str] = None,
     ) -> HsmKeyReference:
-        candidates = [key_identifier, f"{key_identifier}_EXT"]
+        base_id = key_identifier.replace("_EXT", "")
+        candidates = [key_identifier, f"{base_id}_EXT", base_id]
+        
+        # 1. Check for existing EXTERNAL_HSM record
         rec = (
             self.db.query(HsmKeyReference)
             .filter(
@@ -901,56 +904,54 @@ class LMKKeyManagementService:
         if rec and rec.key_status == "ACTIVE":
             return rec
 
-        # Auto-promote or auto-seed missing external key from internal inventory
-        internal_key = (
+        # 2. Check for any record matching candidates
+        any_rec = (
             self.db.query(HsmKeyReference)
-            .filter(HsmKeyReference.key_identifier == key_identifier)
+            .filter(HsmKeyReference.key_identifier.in_(candidates))
             .first()
         )
-
+        
         from app.hsm_adapter import SoftHsmCryptoCore
         clear_hex = (
-            internal_key.clear_key_hex
-            if (internal_key and internal_key.clear_key_hex)
-            else SoftHsmCryptoCore.INTERNAL_CLEAR_KEYS.get(key_identifier, "0123456789ABCDEF0123456789ABCDEF")
+            any_rec.clear_key_hex
+            if (any_rec and any_rec.clear_key_hex)
+            else SoftHsmCryptoCore.INTERNAL_CLEAR_KEYS.get(base_id, "0123456789ABCDEF0123456789ABCDEF")
         )
-        meta = resolve_thales_key_meta(internal_key.key_type if internal_key else "ZPK", None)
+        meta = resolve_thales_key_meta(any_rec.key_type if any_rec else "ZPK", None)
         token = f"U{clear_hex.upper()}"
         kvc_val = SoftHsmCryptoCore.calculate_kcv(clear_hex)
+        target_alias = f"{base_id}_EXT"
 
-        ext_alias = f"{key_identifier}_EXT"
-        existing_ext = self.db.query(HsmKeyReference).filter(HsmKeyReference.key_identifier == ext_alias).first()
-        if existing_ext:
-            existing_ext.provider_type = "EXTERNAL_HSM"
-            existing_ext.encrypted_key_block = token
-            existing_ext.hsm_key_reference = token
-            existing_ext.key_status = "ACTIVE"
-            self.db.commit()
-            return existing_ext
+        ext_record = self.db.query(HsmKeyReference).filter(HsmKeyReference.key_identifier == target_alias).first()
+        if not ext_record:
+            ext_record = HsmKeyReference(
+                key_name=f"External {base_id}",
+                key_type=any_rec.key_type if any_rec else "ZPK",
+                key_usage=meta["usage"],
+                key_identifier=target_alias,
+                kvc=kvc_val,
+                algorithm="3DES_2KEY",
+                key_length=128,
+                hsm_key_reference=token,
+                encrypted_key_block=token,
+                clear_key_hex=None,
+                provider_type="EXTERNAL_HSM",
+                thales_key_type_code=meta["code"],
+                key_scheme="U",
+                key_version=1,
+                lmk_id="00",
+                key_status="ACTIVE",
+            )
+            self.db.add(ext_record)
+        else:
+            ext_record.provider_type = "EXTERNAL_HSM"
+            ext_record.encrypted_key_block = token
+            ext_record.hsm_key_reference = token
+            ext_record.key_status = "ACTIVE"
 
-        # Insert new EXTERNAL_HSM record so the transaction can proceed
-        promoted = HsmKeyReference(
-            key_name=f"External {key_identifier}",
-            key_type=internal_key.key_type if internal_key else "ZPK",
-            key_usage=meta["usage"],
-            key_identifier=ext_alias,
-            kvc=kvc_val,
-            algorithm="3DES_2KEY",
-            key_length=128,
-            hsm_key_reference=token,
-            encrypted_key_block=token,
-            clear_key_hex=None,
-            provider_type="EXTERNAL_HSM",
-            thales_key_type_code=meta["code"],
-            key_scheme="U",
-            key_version=1,
-            lmk_id="00",
-            key_status="ACTIVE",
-        )
-        self.db.add(promoted)
         self.db.commit()
-        self.db.refresh(promoted)
-        return promoted
+        self.db.refresh(ext_record)
+        return ext_record
 
     @staticmethod
     def serialize_key_safe(k: HsmKeyReference) -> Dict[str, Any]:
