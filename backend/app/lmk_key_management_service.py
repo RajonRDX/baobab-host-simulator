@@ -132,20 +132,19 @@ class ExternalSoftHSMBridge:
 
     def __init__(self, remote_url: Optional[str] = None, timeout_seconds: int = 60):
         raw_url = (remote_url or settings.HSM_REMOTE_URL or "http://127.0.0.1:8000").strip().rstrip("/")
-        if raw_url.endswith("/api/hsm/execute") or raw_url.endswith("/api/host/command") or raw_url.endswith("/api/hsm_api"):
+        if raw_url.endswith("/api/host/command") or raw_url.endswith("/api/hsm/execute") or raw_url.endswith("/api/hsm_api"):
             self.base_url = raw_url.rsplit("/api/", 1)[0]
             self.execute_url = raw_url
+        elif "/api/" in raw_url:
+            self.execute_url = raw_url
+            self.base_url = raw_url.split("/api/")[0]
         else:
             self.base_url = raw_url
-            if "/api/" in self.base_url:
-            self.execute_url = self.base_url
-            self.base_url = self.base_url.split("/api/")[0]
-        else:
-            self.execute_url = f"{self.base_url}/api/host/command" 
+            self.execute_url = f"{self.base_url}/api/host/command"
         self.status_url = f"{self.base_url}/api/status"
         self.keys_url = f"{self.base_url}/api/keys"
         self.timeout = timeout_seconds
-
+        
     def execute_command(
         self,
         raw_command: str,
