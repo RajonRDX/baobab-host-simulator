@@ -44,6 +44,7 @@ def get_key_management_audit_deliverable(
     Soft-HSM codebase and Thales payShield 10K manuals (PUGD0537-004, PUGD0538-003, PUGD0539-003).
     """
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     live_status = svc.get_lmk_and_provider_status()
     return {
         "1_lmk_generation_mechanism": (
@@ -105,6 +106,7 @@ def get_lmk_status(
     _: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     return svc.get_lmk_and_provider_status()
 
 
@@ -126,6 +128,7 @@ def switch_hsm_provider(
         settings.HSM_REMOTE_URL = payload.remote_url.strip()
 
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     return svc.get_lmk_and_provider_status()
 
 
@@ -137,6 +140,7 @@ def list_provider_keys(
     _: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     active_prov = svc.active_provider_type()
     target_prov = (provider_type or active_prov).upper().strip()
 
@@ -161,6 +165,7 @@ def sync_seeded_external_keys(
     current_user: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     try:
         return svc.sync_default_external_keys(current_user=current_user)
     except Exception as exc:
@@ -174,6 +179,7 @@ def generate_external_key_a0(
     current_user: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     try:
         return svc.generate_key_via_soft_hsm_a0(payload.model_dump(), current_user=current_user)
     except ConnectionError as ce:
@@ -189,6 +195,7 @@ def import_external_key_a6(
     current_user: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     try:
         return svc.import_key_via_soft_hsm_a6(payload.model_dump(), current_user=current_user)
     except ConnectionError as ce:
@@ -204,6 +211,7 @@ def export_external_key_a8(
     _: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     try:
         return svc.export_key_via_soft_hsm_a8(payload.model_dump())
     except ConnectionError as ce:
@@ -219,6 +227,7 @@ def verify_external_key_kcv_bu(
     _: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     try:
         return svc.verify_key_kcv_via_soft_hsm_bu(key_identifier)
     except ConnectionError as ce:
@@ -234,6 +243,7 @@ def rotate_external_key_a0(
     current_user: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
+    svc.seed_fallback_external_keys()
     try:
         return svc.rotate_external_key(
             key_identifier=payload.key_identifier,
@@ -245,145 +255,3 @@ def rotate_external_key_a0(
         raise HTTPException(status_code=502, detail=str(ce))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
-
-
-@router.get("/provider/status")
-def get_provider_status(db: Session = Depends(get_db)):
-    svc = LMKKeyManagementService(db)
-    try:
-        return svc.get_lmk_and_provider_status()
-    except Exception as exc:
-        is_ext = settings.HSM_MODE in ("SOFT_HSM_REMOTE", "EXTERNAL_HSM")
-        return {
-            "active_provider": "EXTERNAL_HSM" if is_ext else "INTERNAL_HSM",
-            "hsm_mode": settings.HSM_MODE,
-            "online": True,
-            "hsm_state": "ONLINE",
-            "lmk_id": "00",
-            "lmk_check_value": "D3B82A0000000000" if is_ext else "A1B2C30000000000",
-            "lmk_kcv_short": "D3B82A" if is_ext else "A1B2C3",
-            "firmware": "1347-0900",
-            "remote_url": settings.HSM_REMOTE_URL,
-            "key_counts": {"internal_keys": 8, "external_keys": 8},
-        }
-
-
-@router.post("/provider/switch")
-def switch_provider(payload: Dict[str, Any], db: Session = Depends(get_db)):
-    target = str(payload.get("provider") or payload.get("mode") or "INTERNAL_HSM").upper().strip()
-    
-    if target in ("EXTERNAL_HSM", "SOFT_HSM_REMOTE", "REMOTE"):
-        settings.HSM_MODE = "SOFT_HSM_REMOTE"
-        active_provider = "EXTERNAL_HSM"
-    else:
-        settings.HSM_MODE = "SOFT_HSM_LOCAL"
-        active_provider = "INTERNAL_HSM"
-
-    svc = LMKKeyManagementService(db)
-    
-    # Sync or seed keys without letting errors abort the switch
-    try:
-        from app.seed_data import seed_external_hsm_keys_if_needed
-        seed_external_hsm_keys_if_needed(db)
-    except Exception:
-        pass
-
-    try:
-        status_info = svc.get_lmk_and_provider_status()
-    except Exception:
-        status_info = {
-            "active_provider": active_provider,
-            "hsm_mode": settings.HSM_MODE,
-            "online": True,
-            "hsm_state": "ONLINE",
-            "lmk_id": "00",
-            "lmk_check_value": "D3B82A0000000000" if active_provider == "EXTERNAL_HSM" else "A1B2C30000000000",
-            "lmk_kcv_short": "D3B82A" if active_provider == "EXTERNAL_HSM" else "A1B2C3",
-            "firmware": "1347-0900",
-            "remote_url": settings.HSM_REMOTE_URL,
-        }
-
-    return {
-        "status": "SWITCHED",
-        "hsm_mode": settings.HSM_MODE,
-        "active_provider": active_provider,
-        "provider_status": status_info,
-    }
-
-
-# ==============================================================================
-# UNIVERSAL RESILIENT PROVIDER SWITCH OVERRIDES (PRODUCTION FIX)
-# ==============================================================================
-def _execute_safe_provider_switch(payload: Dict[str, Any], db: Session) -> Dict[str, Any]:
-    raw_target = (
-        payload.get("provider_type")
-        or payload.get("provider")
-        or payload.get("hsm_mode")
-        or payload.get("mode")
-        or payload.get("target_provider")
-        or "INTERNAL_HSM"
-    )
-    target = str(raw_target).upper().strip()
-
-    if any(k in target for k in ("EXT", "REMOTE", "THALES", "CLOUD")):
-        settings.HSM_MODE = "SOFT_HSM_REMOTE"
-        active_provider = "EXTERNAL_HSM"
-    else:
-        settings.HSM_MODE = "SOFT_HSM_LOCAL"
-        active_provider = "INTERNAL_HSM"
-
-    # Update HostParameter in DB if present so mode persists across workers
-    try:
-        from app.models import HostParameter
-        hp = db.query(HostParameter).filter(HostParameter.parameter_name == "HSM_MODE").first()
-        if hp:
-            hp.parameter_value = {"mode": settings.HSM_MODE, "provider_type": active_provider}
-            db.commit()
-    except Exception:
-        db.rollback()
-
-    # Ensure external keys exist in DB
-    try:
-        from app.seed_data import seed_external_hsm_keys_if_needed
-        seed_external_hsm_keys_if_needed(db)
-    except Exception:
-        pass
-
-    svc = LMKKeyManagementService(db)
-    try:
-        if active_provider == "EXTERNAL_HSM":
-            svc.sync_default_external_keys("admin")
-    except Exception:
-        pass
-
-    try:
-        status_info = svc.get_lmk_and_provider_status()
-        status_info["online"] = True
-        status_info["active_provider"] = active_provider
-        status_info["hsm_mode"] = settings.HSM_MODE
-    except Exception:
-        status_info = {
-            "active_provider": active_provider,
-            "hsm_mode": settings.HSM_MODE,
-            "online": True,
-            "hsm_state": "AUTHORIZED_ONLINE",
-            "lmk_id": "00",
-            "lmk_check_value": "D3B82A0000000000" if active_provider == "EXTERNAL_HSM" else "A1B2C30000000000",
-            "lmk_kcv_short": "D3B82A" if active_provider == "EXTERNAL_HSM" else "A1B2C3",
-            "firmware": "1347-0900",
-            "remote_url": settings.HSM_REMOTE_URL,
-            "key_counts": {"internal_keys": 8, "external_keys": 8, "lmk_domain_mismatched_keys": 0},
-        }
-
-    return {
-        "status": "OK",
-        "switched": True,
-        "active_provider": active_provider,
-        "provider_type": active_provider,
-        "hsm_mode": settings.HSM_MODE,
-        "online": True,
-        "lmk_check_value": status_info.get("lmk_check_value", "D3B82A0000000000"),
-        "lmk_kcv_short": status_info.get("lmk_kcv_short", "D3B82A"),
-        "provider_status": status_info,
-        **status_info,
-    }

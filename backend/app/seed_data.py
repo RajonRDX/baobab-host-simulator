@@ -1,3 +1,5 @@
+import logging
+logger = logging.getLogger(__name__)
 """
 seed_data.py
 Seeds the local development database with synthetic records:
@@ -327,6 +329,11 @@ def seed_initial_data(db: Session) -> None:
         )
 
     db.commit()
+    try:
+        from app.lmk_key_management_service import LMKKeyManagementService
+        LMKKeyManagementService(db).seed_fallback_external_keys()
+    except Exception:
+        logger.exception("Failed to seed fallback external HSM keys at startup")
 
 # [PATCH step01_01:seed_ps_and_institutions_fn]
 def seed_processing_systems_and_institutions(db: Session) -> None:
@@ -565,38 +572,3 @@ def seed_processing_systems_and_institutions(db: Session) -> None:
 
     db.commit()
 
-
-def seed_external_hsm_keys_if_needed(db: Session) -> None:
-    """Pre-seeds default EXTERNAL_HSM records so provider switching never fails with isolation errors."""
-    from app.models import HsmKeyReference
-    default_external = [
-        ("PVK_VISA_01_EXT", "PVK_VISA_01", "PVK", "002", "U5566778899AABBCC5566778899AABBCC", "782100", "PIN_VERIFICATION_KEY"),
-        ("AWK_ATM_01_EXT", "AWK_ATM_01", "AWK", "001", "U1A2B3C4D5E6F70811A2B3C4D5E6F7081", "123456", "ACQUIRER_WORKING_PIN_KEY"),
-        ("IWK_SW_01_EXT", "IWK_SW_01", "IWK", "001", "U89ABCDEF0123456789ABCDEF01234567", "654321", "ISSUER_WORKING_PIN_KEY"),
-        ("CVK_MAIN_01_EXT", "CVK_MAIN_01", "CVK", "402", "U5566778899AABBCC5566778899AABBCC", "011000", "CARD_VERIFICATION_KEY"),
-        ("TAK_MAC_01_EXT", "TAK_MAC_01", "TAK", "003", "U8899AABBCCDDEEFF8899AABBCCDDEEFF", "112233", "TERMINAL_AUTH_MAC_KEY"),
-        ("MK_AC_EMV01_EXT", "MK_AC_EMV01", "MK-AC", "109", "UAABBCCDDEEFF00112233445566778899", "A1B2C3", "EMV_MASTER_KEY_AC"),
-        ("ZMK_MAIN_EXT", "ZMK_MAIN", "ZMK", "000", "U0123456789ABCDEF0123456789ABCDEF", "D3B82A", "ZONE_MASTER_KEY"),
-    ]
-    for ext_alias, base_alias, ktype, tcode, tok, kvc, usage in default_external:
-        existing = db.query(HsmKeyReference).filter(HsmKeyReference.key_identifier == ext_alias).first()
-        if not existing:
-            db.add(HsmKeyReference(
-                key_name=f"External {ktype} ({base_alias})",
-                key_type=ktype,
-                key_usage=usage,
-                key_identifier=ext_alias,
-                kvc=kvc,
-                algorithm="3DES_2KEY",
-                key_length=128,
-                hsm_key_reference=tok,
-                encrypted_key_block=tok,
-                clear_key_hex=None,
-                provider_type="EXTERNAL_HSM",
-                thales_key_type_code=tcode,
-                key_scheme="U",
-                key_version=1,
-                lmk_id="00",
-                key_status="ACTIVE",
-            ))
-    db.commit()
