@@ -187,3 +187,13 @@ Authoritative execution log updated automatically by `tools/patcher.py`.
 ## [2026-11-02 14:12:28] `tx_log_viewer_v1_v2_v3` — Enterprise Transaction Log Viewer & TIC v2.164e Inspector
 - **Touched Files**: `backend/app/tic_decoder_engine.py`, `backend/app/models.py`, `backend/app/host_engine.py`, `backend/app/database_indexes_tx_logs.py`, `backend/app/routers/transaction_logs_router.py`, `frontend/src/pages/TransactionLogViewerPage.tsx`, `frontend/src/App.tsx`, `frontend/src/components/Layout.tsx`, `backend/tests/test_transaction_log_viewer.py`
 - [x] **Completed**: Automatic DB loading, configurable auto-refresh timer with countdown & pause/resume, 6 summary cards, 20 server-side filters, column customizer, and 6-tab transaction investigation workbench.
+
+<!-- PROGRESS:simulator_workbench_v2 -->
+## [2026-11-05 14:02:13] `simulator_workbench_v2` - Simulator workbench upgrade
+- **Touched Files**: `backend/app/simulator_workbench_router.py`, `backend/app/main.py`, `frontend/src/pages/SimulatorAndJournal.tsx`, `backend/tests/test_simulator_workbench.py`
+- [x] **Completed**: Paste or load a raw TIC / ISO 8583 message (text box, drag and drop, or file) and unpack every field into the editor.
+- [x] **Completed**: STAN (DE11) and RRN (DE37) start from the next free values after the last transaction in the database.
+- [x] **Completed**: Time fields have Now buttons; a Date and time tab sets all of them at once.
+- [x] **Completed**: Last session is restored on open; named cases can be saved, opened and deleted.
+- [x] **Completed**: Removed the Load Real Backend Test Scenario bar and redesigned the page.
+- **Known Issues**: None

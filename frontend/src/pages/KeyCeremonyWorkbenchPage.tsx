@@ -1,361 +1,705 @@
 import React, { useEffect, useState } from 'react';
-import { KeyRound, ShieldCheck, Sparkles, RefreshCw, Copy, CheckCircle2, Lock, ArrowRight, Layers, Download, Upload } from 'lucide-react';
-import { apiFetch } from '../api';
+import { api } from '../services/api';
+
+interface KeyRecord {
+  id: string;
+  key_identifier: string;
+  key_name: string;
+  key_type: string;
+  thales_key_type_code: string;
+  key_usage: string;
+  key_scheme: string;
+  key_version: number;
+  key_status: string;
+  kvc: string;
+  algorithm: string;
+  key_length: number;
+  provider_type: 'INTERNAL_HSM' | 'EXTERNAL_HSM';
+  lmk_id: string;
+  lmk_check_value: string | null;
+  encrypted_key_block: string;
+  masked_key_block: string;
+  institution_code?: string;
+  created_at?: string;
+}
 
 export const KeyCeremonyWorkbenchPage: React.FC = () => {
-  const [tab, setTab] = useState<'CEREMONY' | 'RANDOM' | 'ZMK'>('CEREMONY');
-  const [keys, setKeys] = useState<any[]>([]);
-  const [institutions, setInstitutions] = useState<any[]>([]);
-  const [msg, setMsg] = useState('');
+  const [lmkStatus, setLmkStatus] = useState<any>(null);
+  const [auditReport, setAuditReport] = useState<any>(null);
+  const [keys, setKeys] = useState<KeyRecord[]>([]);
+  const [providerFilter, setProviderFilter] = useState<string>('ACTIVE_PROVIDER');
+  const [remoteUrlInput, setRemoteUrlInput] = useState<string>('http://127.0.0.1:8001');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [banner, setBanner] = useState<{ type: 'ok' | 'err' | 'warn'; msg: string } | null>(null);
+  const [activeTab, setActiveTab] = useState<'inventory' | 'a0_generate' | 'a6_import' | 'a8_export' | 'audit'>('inventory');
 
-  // 1. Ceremony State (Assembly)
-  const [keyIdentifier, setKeyIdentifier] = useState('AWK_ATM_NEW_01');
-  const [keyType, setKeyType] = useState('AWK');
-  const [owningInstId, setOwningInstId] = useState('');
-  const [comp1, setComp1] = useState('11111111111111111111111111111111');
-  const [comp2, setComp2] = useState('22222222222222222222222222222222');
-  const [comp3, setComp3] = useState('33333333333333333333333333333333');
-  const [useThreeParts, setUseThreeParts] = useState(true);
-  const [assemblyResult, setAssemblyResult] = useState<any | null>(null);
+  // A0 Key Generation Form State
+  const [a0Alias, setA0Alias] = useState('ZPK_EXT_ISS_01');
+  const [a0Name, setA0Name] = useState('External Interchange ZPK');
+  const [a0Type, setA0Type] = useState('ZPK');
+  const [a0Scheme, setA0Scheme] = useState('U');
+  const [a0Mode, setA0Mode] = useState('0');
+  const [a0ZmkAlias, setA0ZmkAlias] = useState('ZMK_MAIN');
+  const [a0Result, setA0Result] = useState<any>(null);
 
-  // 2. Random Key State
-  const [randomLength, setRandomLength] = useState(128);
-  const [randomKeyResult, setRandomKeyResult] = useState<any | null>(null);
+  // A6 Key Import Form State
+  const [a6Alias, setA6Alias] = useState('ZPK_PARTNER_IMP_01');
+  const [a6Name, setA6Name] = useState('Imported Partner ZPK');
+  const [a6Type, setA6Type] = useState('ZPK');
+  const [a6ZmkAlias, setA6ZmkAlias] = useState('ZMK_MAIN');
+  const [a6EncKey, setA6EncKey] = useState('');
+  const [a6Scheme, setA6Scheme] = useState('U');
+  const [a6Result, setA6Result] = useState<any>(null);
 
-  // 3. ZMK Import / Export State
-  const [selectedZmkId, setSelectedZmkId] = useState('ZMK_MAIN');
-  const [exportKeyId, setExportKeyId] = useState('AWK_ATM_01');
-  const [zmkExportResult, setZmkExportResult] = useState<any | null>(null);
-  const [importEncKeyHex, setImportEncKeyHex] = useState('');
-  const [importResult, setImportResult] = useState<any | null>(null);
+  // A8 Key Export Form State
+  const [a8KeyAlias, setA8KeyAlias] = useState('AWK_ATM_01');
+  const [a8ZmkAlias, setA8ZmkAlias] = useState('ZMK_MAIN');
+  const [a8Scheme, setA8Scheme] = useState('U');
+  const [a8Result, setA8Result] = useState<any>(null);
 
-  const loadData = async () => {
+  const loadAll = async (filterOverride?: string) => {
+    setLoading(true);
     try {
-      const [kList, iList] = await Promise.all([
-        apiFetch('/hsm/keys'),
-        apiFetch('/institutions'),
-      ]);
-      setKeys(kList);
-      setInstitutions(iList);
-      if (iList.length > 0 && !owningInstId) setOwningInstId(iList[0].id);
-    } catch (e) {
-      console.error(e);
+      const statusRes = await api.get('/api/hsm/lmk-key-management/status');
+      setLmkStatus(statusRes.data);
+      if (statusRes.data?.remote_url) {
+        setRemoteUrlInput(statusRes.data.remote_url);
+      }
+      const effFilter = filterOverride || providerFilter;
+      const qParam = effFilter === 'ACTIVE_PROVIDER' ? statusRes.data.active_provider : effFilter;
+      const keysRes = await api.get(`/api/hsm/lmk-key-management/keys?provider_type=${qParam}&include_superseded=true`);
+      setKeys(keysRes.data.keys || []);
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || e.message || 'Failed to load HSM key status' });
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadAll();
   }, []);
 
-  const handleAssembleAndRegister = async () => {
-    setMsg('');
+  const handleSwitchProvider = async (mode: 'INTERNAL_HSM' | 'EXTERNAL_HSM') => {
+    setBanner(null);
     try {
-      const components = useThreeParts ? [comp1, comp2, comp3] : [comp1, comp2];
-      const res = await apiFetch('/hsm/ceremony/assemble-components', {
-        method: 'POST',
-        body: JSON.stringify({
-          key_identifier: keyIdentifier,
-          key_type: keyType,
-          institution_id: owningInstId || null,
-          components,
-        }),
+      const res = await api.post('/api/hsm/lmk-key-management/provider', {
+        provider_mode: mode,
+        remote_url: remoteUrlInput.trim(),
       });
-      setAssemblyResult(res);
-      setMsg(`Key Ceremony Successful: Key ${res.key_identifier} assembled (KVC: ${res.kvc}) and saved to database.`);
-      loadData();
-    } catch (err: any) {
-      setMsg(`Error: ${err.message}`);
+      setLmkStatus(res.data);
+      setBanner({
+        type: res.data.online ? 'ok' : 'warn',
+        msg: `Switched Cryptographic Authority to ${res.data.active_provider} (LMK KCV: ${res.data.lmk_check_value})`,
+      });
+      await loadAll(mode);
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || 'Provider switch failed' });
     }
   };
 
-  const handleGenerateRandom = async () => {
+  const handleSyncExternalKeys = async () => {
+    setBanner(null);
     try {
-      const res = await apiFetch('/hsm/ceremony/generate-random', {
-        method: 'POST',
-        body: JSON.stringify({ length_bits: randomLength }),
+      const res = await api.post('/api/hsm/lmk-key-management/sync-seeded');
+      setBanner({
+        type: 'ok',
+        msg: `Synchronized & BU-verified ${res.data.count} LMK-encrypted keys from External Soft-HSM (Domain ${res.data.lmk_check_value})`,
       });
-      setRandomKeyResult(res);
-    } catch (err: any) {
-      alert(err.message);
+      await loadAll('EXTERNAL_HSM');
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || 'Failed to sync keys from External Soft-HSM' });
     }
   };
 
-  const handleExportUnderZmk = async () => {
+  const handleGenerateA0 = async () => {
+    setBanner(null);
+    setA0Result(null);
     try {
-      const res = await apiFetch('/hsm/ceremony/export-under-zmk', {
-        method: 'POST',
-        body: JSON.stringify({ key_identifier: exportKeyId, zmk_identifier: selectedZmkId }),
+      const res = await api.post('/api/hsm/lmk-key-management/generate', {
+        key_identifier: a0Alias,
+        key_name: a0Name,
+        key_type: a0Type,
+        key_scheme: a0Scheme,
+        mode: a0Mode,
+        export_zmk_key_identifier: a0Mode === '1' ? a0ZmkAlias : undefined,
       });
-      setZmkExportResult(res);
-    } catch (err: any) {
-      alert(err.message);
+      setA0Result(res.data);
+      setBanner({
+        type: 'ok',
+        msg: `Soft-HSM Command A0 (A100) succeeded. Stored LMK key block for '${res.data.key.key_identifier}' (KCV: ${res.data.key.kvc})`,
+      });
+      await loadAll();
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || 'Soft-HSM A0 key generation failed' });
     }
   };
+
+  const handleImportA6 = async () => {
+    setBanner(null);
+    setA6Result(null);
+    try {
+      const res = await api.post('/api/hsm/lmk-key-management/import', {
+        key_identifier: a6Alias,
+        key_name: a6Name,
+        key_type: a6Type,
+        zmk_key_identifier: a6ZmkAlias,
+        encrypted_key_under_zmk: a6EncKey,
+        key_scheme_lmk: a6Scheme,
+      });
+      setA6Result(res.data);
+      setBanner({
+        type: 'ok',
+        msg: `Soft-HSM Command A6 (A700) succeeded. Imported '${res.data.key.key_identifier}' under LMK (KCV: ${res.data.key.kvc})`,
+      });
+      await loadAll();
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || 'Soft-HSM A6 key import failed' });
+    }
+  };
+
+  const handleExportA8 = async () => {
+    setBanner(null);
+    setA8Result(null);
+    try {
+      const res = await api.post('/api/hsm/lmk-key-management/export', {
+        key_identifier: a8KeyAlias,
+        zmk_key_identifier: a8ZmkAlias,
+        export_scheme: a8Scheme,
+      });
+      setA8Result(res.data);
+      setBanner({
+        type: 'ok',
+        msg: `Soft-HSM Command A8 (A900) succeeded. Exported '${a8KeyAlias}' under '${a8ZmkAlias}' (KCV: ${res.data.kcv})`,
+      });
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || 'Soft-HSM A8 key export failed' });
+    }
+  };
+
+  const handleVerifyBu = async (alias: string) => {
+    setBanner(null);
+    try {
+      const res = await api.post(`/api/hsm/lmk-key-management/verify-kcv/${alias}`);
+      setBanner({
+        type: res.data.kcv_matched ? 'ok' : 'warn',
+        msg: `Soft-HSM BU (BV00) check for '${alias}': Calculated KCV ${res.data.calculated_kvc} (Stored: ${res.data.stored_kvc}) | Raw: ${res.data.raw_response}`,
+      });
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || `BU check failed for ${alias}` });
+    }
+  };
+
+  const handleRotateKey = async (alias: string) => {
+    setBanner(null);
+    try {
+      const res = await api.post('/api/hsm/lmk-key-management/rotate', { key_identifier: alias });
+      setBanner({
+        type: 'ok',
+        msg: `Rotated '${alias}' via Soft-HSM A0: v${res.data.previous_version} to v${res.data.new_version} (New KCV: ${res.data.key.kvc})`,
+      });
+      await loadAll();
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || `Rotation failed for ${alias}` });
+    }
+  };
+
+  const handleDeleteKey = async (id: string, alias: string) => {
+    setBanner(null);
+    try {
+      await api.delete(`/api/hsm/keys/${id}?force=true`);
+      setBanner({ type: 'ok', msg: `Deleted key record '${alias}' from Host inventory` });
+      await loadAll();
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: e?.response?.data?.detail || 'Delete failed' });
+    }
+  };
+
+  const loadAuditDeliverable = async () => {
+    setActiveTab('audit');
+    try {
+      const res = await api.get('/api/hsm/lmk-key-management/audit-report');
+      setAuditReport(res.data);
+    } catch (e: any) {
+      setBanner({ type: 'err', msg: 'Failed to load audit report' });
+    }
+  };
+
+  const isExternal = lmkStatus?.active_provider === 'EXTERNAL_HSM';
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold">HSM Key Management & Split-Knowledge Ceremony</h1>
-          <p className="text-xs text-slate-500">
-            Execute 2/3 component XOR key ceremonies, odd-parity key generation, and ZMK key translation (Dual Control & Split Knowledge)
-          </p>
+      {/* Header & Active Cryptographic Authority Banner */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+        <div className="flex flex-wrap justify-between items-center gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-white font-mono">
+              LMK-Centric Key Management & Cryptographic Ownership
+            </h1>
+            <p className="text-xs text-slate-400 mt-1">
+              Thales payShield 10K LMK Domain Isolation · Zero Clear Key Storage · Live A0 / A6 / A8 / BU / NC Execution
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleSwitchProvider('INTERNAL_HSM')}
+              className={`px-3 py-1.5 rounded text-xs font-mono font-bold transition ${
+                !isExternal ? 'bg-sky-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              Internal Simulator HSM
+            </button>
+            <button
+              onClick={() => handleSwitchProvider('EXTERNAL_HSM')}
+              className={`px-3 py-1.5 rounded text-xs font-mono font-bold transition ${
+                isExternal ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              External Soft-HSM Authority
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-mono px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-bold">
-            Policy: PCI-HSM Dual Control
-          </span>
-        </div>
-      </div>
 
-      {msg && (
-        <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono">
-          {msg}
-        </div>
-      )}
+        {/* LMK Domain Status Grid */}
+        {lmkStatus && (
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 pt-2 border-t border-slate-800 text-xs font-mono">
+            <div className="bg-slate-950 border border-slate-800 p-3 rounded">
+              <div className="text-slate-400">Active Authority</div>
+              <div className={`font-bold mt-1 ${isExternal ? 'text-emerald-400' : 'text-sky-400'}`}>
+                {lmkStatus.active_provider} ({lmkStatus.online ? 'ONLINE' : 'OFFLINE'})
+              </div>
+            </div>
+            <div className="bg-slate-950 border border-slate-800 p-3 rounded">
+              <div className="text-slate-400">LMK Domain Check Value (NC)</div>
+              <div className="font-bold text-amber-400 mt-1">
+                Slot %{lmkStatus.lmk_id || '00'} · {lmkStatus.lmk_check_value}
+              </div>
+            </div>
+            <div className="bg-slate-950 border border-slate-800 p-3 rounded">
+              <div className="text-slate-400">HSM State & Firmware</div>
+              <div className="font-bold text-slate-200 mt-1">
+                {lmkStatus.hsm_state} ({lmkStatus.firmware})
+              </div>
+            </div>
+            <div className="bg-slate-950 border border-slate-800 p-3 rounded md:col-span-2">
+              <div className="text-slate-400 mb-1">External Soft-HSM Endpoint & Seeded LMK Sync</div>
+              <div className="flex gap-2">
+                <input
+                  value={remoteUrlInput}
+                  onChange={(e) => setRemoteUrlInput(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-emerald-300 text-xs"
+                  placeholder="http://127.0.0.1:8001"
+                />
+                <button
+                  onClick={handleSyncExternalKeys}
+                  className="bg-emerald-700 hover:bg-emerald-600 px-3 py-1 rounded text-white font-bold whitespace-nowrap"
+                >
+                  Sync LMK Keys
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
-        {[
-          ['CEREMONY', '1. Split-Component Key Assembly Ceremony', Layers],
-          ['RANDOM', '2. Parity-Verified Random Key Generator', Sparkles],
-          ['ZMK', '3. ZMK Key Exchange (Import / Export)', KeyRound],
-        ].map(([k, label, Icon]: any) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-mono font-bold transition ${
-              tab === k
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800'
+        {lmkStatus?.persistence_audit?.ephemeral_risk && (
+          <div className="bg-amber-950/50 border border-amber-700/60 rounded p-2.5 text-xs font-mono text-amber-200">
+            <strong>LMK Persistence Notice:</strong> {lmkStatus.persistence_audit.ephemeral_risk}
+          </div>
+        )}
+
+        {banner && (
+          <div
+            className={`p-3 rounded text-xs font-mono border ${
+              banner.type === 'ok'
+                ? 'bg-emerald-950/70 border-emerald-700 text-emerald-200'
+                : banner.type === 'warn'
+                ? 'bg-amber-950/70 border-amber-700 text-amber-200'
+                : 'bg-rose-950/70 border-rose-700 text-rose-200'
             }`}
           >
-            <Icon size={15} />
-            <span>{label}</span>
+            {banner.msg}
+          </div>
+        )}
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex flex-wrap gap-2 border-b border-slate-800 pb-2 font-mono text-xs">
+        {[
+          { id: 'inventory', label: '1. Key Inventory & LMK Domains' },
+          { id: 'a0_generate', label: '2. Generate Key (Soft-HSM A0)' },
+          { id: 'a6_import', label: '3. Import Key (Soft-HSM A6)' },
+          { id: 'a8_export', label: '4. Export / Translate Key (Soft-HSM A8)' },
+          { id: 'audit', label: '5. Mandatory LMK Audit Deliverable (Part G)' },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => (t.id === 'audit' ? loadAuditDeliverable() : setActiveTab(t.id as any))}
+            className={`px-3.5 py-2 rounded font-bold transition ${
+              activeTab === t.id ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* TAB 1: CEREMONY */}
-      {tab === 'CEREMONY' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-7 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-bold flex justify-between items-center">
-              <span>Split Knowledge Key Assembly Form</span>
-              <label className="flex items-center gap-2 text-xs font-mono cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={useThreeParts}
-                  onChange={(e) => setUseThreeParts(e.target.checked)}
-                />
-                <span>Use 3 Custodians (3-Part XOR)</span>
-              </label>
+      {/* TAB 1: KEY INVENTORY */}
+      {activeTab === 'inventory' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+          <div className="flex flex-wrap justify-between items-center gap-3">
+            <h2 className="text-sm font-bold font-mono text-emerald-400">
+              Cryptographic Key Inventory (Sensitive Key Material Strictly Hidden)
             </h2>
-
-            <div className="grid grid-cols-2 gap-3 text-xs font-mono">
-              <div>
-                <label className="block text-slate-400 mb-1">New Key Identifier</label>
-                <input
-                  value={keyIdentifier}
-                  onChange={(e) => setKeyIdentifier(e.target.value)}
-                  placeholder="e.g. AWK_ATM_NEW_01"
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5 font-bold text-emerald-400"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Key Type / Usage</label>
-                <select
-                  value={keyType}
-                  onChange={(e) => setKeyType(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5"
+            <div className="flex items-center gap-2 text-xs font-mono">
+              <span className="text-slate-400">Filter Provider:</span>
+              {['ACTIVE_PROVIDER', 'EXTERNAL_HSM', 'INTERNAL_HSM', 'ALL'].map((pf) => (
+                <button
+                  key={pf}
+                  onClick={() => {
+                    setProviderFilter(pf);
+                    loadAll(pf);
+                  }}
+                  className={`px-2.5 py-1 rounded ${
+                    providerFilter === pf ? 'bg-emerald-600 text-white font-bold' : 'bg-slate-800 text-slate-300'
+                  }`}
                 >
-                  {['AWK', 'ZPK', 'IWK', 'TMK', 'ZMK', 'PVK', 'CVK', 'TAK', 'MK-AC'].map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
+                  {pf}
+                </button>
+              ))}
             </div>
-
-            <div className="space-y-3 pt-2 text-xs font-mono">
-              <div>
-                <label className="block text-slate-400 mb-1">Custodian 1 Component (32 Hex Digits)</label>
-                <input
-                  value={comp1}
-                  onChange={(e) => setComp1(e.target.value)}
-                  maxLength={32}
-                  className="w-full bg-slate-950 text-sky-300 border border-slate-800 rounded px-3 py-2 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Custodian 2 Component (32 Hex Digits)</label>
-                <input
-                  value={comp2}
-                  onChange={(e) => setComp2(e.target.value)}
-                  maxLength={32}
-                  className="w-full bg-slate-950 text-amber-300 border border-slate-800 rounded px-3 py-2 font-mono"
-                />
-              </div>
-              {useThreeParts && (
-                <div>
-                  <label className="block text-slate-400 mb-1">Custodian 3 Component (32 Hex Digits)</label>
-                  <input
-                    value={comp3}
-                    onChange={(e) => setComp3(e.target.value)}
-                    maxLength={32}
-                    className="w-full bg-slate-950 text-indigo-300 border border-slate-800 rounded px-3 py-2 font-mono"
-                  />
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleAssembleAndRegister}
-              className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2.5 rounded-lg text-xs font-mono flex items-center justify-center gap-2"
-            >
-              <KeyRound size={15} /> Execute Ceremony: XOR Components & Save Key
-            </button>
           </div>
 
-          <div className="lg:col-span-5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-bold">Ceremony Verification & KCV Breakdown</h2>
-            {assemblyResult ? (
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono space-y-2">
-                <div className="flex justify-between items-center text-emerald-400 font-bold border-b border-slate-800 pb-2">
-                  <span>Assembled Key KCV:</span>
-                  <span className="text-base text-amber-400 font-bold">{assemblyResult.kvc}</span>
-                </div>
-                <div><span className="text-slate-400">Key Identifier:</span> {assemblyResult.key_identifier}</div>
-                <div><span className="text-slate-400">Type / Algorithm:</span> {assemblyResult.key_type} (3DES 128-bit)</div>
-                <div><span className="text-slate-400">Odd Parity:</span> <span className="text-emerald-400 font-bold">VERIFIED</span></div>
-                <div className="pt-2 border-t border-slate-800">
-                  <div className="text-[11px] text-slate-400 mb-1">Custodian Component KCVs:</div>
-                  {(assemblyResult.component_kcvs || []).map((kcv: string, idx: number) => (
-                    <div key={idx} className="text-sky-300 text-[11px]">
-                      Part #{idx + 1} KCV: <strong className="text-white">{kcv}</strong>
-                    </div>
-                  ))}
-                </div>
-                <div className="pt-2 text-[10px] text-emerald-400 font-sans">
-                  ✓ Clear key saved to database. HostTransactionProcessor will dynamically use this key for all future transactions referencing {assemblyResult.key_identifier}.
-                </div>
-              </div>
-            ) : (
-              <div className="text-slate-400 text-xs font-mono py-16 text-center">
-                Enter component hex values and click Execute to XOR assemble the operational key.
-              </div>
-            )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left font-mono text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-800 text-slate-400">
+                  <th className="py-2 px-2">Key Alias</th>
+                  <th className="py-2 px-2">Provider</th>
+                  <th className="py-2 px-2">Type (Thales)</th>
+                  <th className="py-2 px-2">Usage</th>
+                  <th className="py-2 px-2">Scheme</th>
+                  <th className="py-2 px-2">Ver</th>
+                  <th className="py-2 px-2">KCV</th>
+                  <th className="py-2 px-2">LMK Domain</th>
+                  <th className="py-2 px-2">LMK-Encrypted Block (Masked)</th>
+                  <th className="py-2 px-2">Status</th>
+                  <th className="py-2 px-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {keys.map((k) => (
+                  <tr key={k.id} className="hover:bg-slate-800/40">
+                    <td className="py-2 px-2 font-bold text-emerald-400">
+                      <div>{k.key_identifier}</div>
+                      <div className="text-[10px] text-slate-400 font-normal">{k.key_name}</div>
+                    </td>
+                    <td className="py-2 px-2">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          k.provider_type === 'EXTERNAL_HSM'
+                            ? 'bg-emerald-950 text-emerald-300 border border-emerald-700'
+                            : 'bg-sky-950 text-sky-300 border border-sky-700'
+                        }`}
+                      >
+                        {k.provider_type}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 text-slate-200">
+                      {k.key_type} <span className="text-slate-400">({k.thales_key_type_code})</span>
+                    </td>
+                    <td className="py-2 px-2 text-slate-300">{k.key_usage}</td>
+                    <td className="py-2 px-2 text-amber-300 font-bold">{k.key_scheme}</td>
+                    <td className="py-2 px-2 text-slate-300">v{k.key_version}</td>
+                    <td className="py-2 px-2 font-bold text-amber-400">{k.kvc}</td>
+                    <td className="py-2 px-2 text-sky-300">
+                      {k.lmk_check_value ? `${k.lmk_check_value.slice(0, 6)} (%${k.lmk_id})` : 'INTERNAL'}
+                    </td>
+                    <td className="py-2 px-2 text-slate-400" title="Clear keys are never stored or displayed">
+                      {k.masked_key_block}
+                    </td>
+                    <td className="py-2 px-2">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          k.key_status === 'ACTIVE'
+                            ? 'bg-emerald-950 text-emerald-300'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {k.key_status}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 space-x-2 whitespace-nowrap">
+                      {k.provider_type === 'EXTERNAL_HSM' && k.key_status === 'ACTIVE' && (
+                        <>
+                          <button
+                            onClick={() => handleVerifyBu(k.key_identifier)}
+                            className="text-sky-400 hover:underline"
+                          >
+                            Verify (BU)
+                          </button>
+                          <button
+                            onClick={() => handleRotateKey(k.key_identifier)}
+                            className="text-amber-400 hover:underline"
+                          >
+                            Rotate (A0)
+                          </button>
+                        </>
+                      )}
+                      <button
+                        onClick={() => handleDeleteKey(k.id, k.key_identifier)}
+                        className="text-rose-400 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
 
-      {/* TAB 2: RANDOM KEY GENERATOR */}
-      {tab === 'RANDOM' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-bold">Parity-Verified Key Generator</h2>
-            <div className="space-y-3 text-xs font-mono">
-              <div>
-                <label className="block text-slate-400 mb-1">Key Length</label>
-                <select
-                  value={randomLength}
-                  onChange={(e) => setRandomLength(parseInt(e.target.value))}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-3 py-2"
-                >
-                  <option value={128}>128-bit (2-Key 3DES / 32 Hex Characters)</option>
-                  <option value={192}>192-bit (3-Key 3DES / 48 Hex Characters)</option>
-                </select>
-              </div>
+      {/* TAB 2: A0 KEY GENERATION */}
+      {activeTab === 'a0_generate' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 font-mono text-xs">
+          <h2 className="text-sm font-bold text-emerald-400">
+            Generate Cryptographic Key on External Soft-HSM (Thales Command A0 / Response A1)
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-slate-400 mb-1">Key Alias (Host Identifier)</label>
+              <input
+                value={a0Alias}
+                onChange={(e) => setA0Alias(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-emerald-300"
+              />
             </div>
-            <button
-              onClick={handleGenerateRandom}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-lg text-xs font-mono"
-            >
-              Generate Cryptographic Random Key ➔
-            </button>
-          </div>
-
-          <div className="lg:col-span-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-bold">Generated Key Payload</h2>
-            {randomKeyResult ? (
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono space-y-2">
-                <div className="flex justify-between items-center text-emerald-400 font-bold border-b border-slate-800 pb-2">
-                  <span>Computed KCV:</span>
-                  <span className="text-base text-amber-400">{randomKeyResult.kcv}</span>
-                </div>
-                <div><span className="text-slate-400">Clear Hex Key:</span></div>
-                <div className="p-2 rounded bg-slate-900 text-sky-300 break-all select-all">{randomKeyResult.key_hex}</div>
-                <div><span className="text-slate-400">DES Odd Parity:</span> <span className="text-emerald-400 font-bold">ENFORCED (Mod-2 Validated)</span></div>
-              </div>
-            ) : (
-              <div className="text-slate-400 text-xs font-mono py-12 text-center">
-                Click generate to produce a high-entropy DES odd-parity key.
+            <div>
+              <label className="block text-slate-400 mb-1">Key Label / Description</label>
+              <input
+                value={a0Name}
+                onChange={(e) => setA0Name(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Key Type (Maps to Thales LMK Variant)</label>
+              <select
+                value={a0Type}
+                onChange={(e) => setA0Type(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200"
+              >
+                <option value="ZMK">ZMK (000 - LMK 04-05)</option>
+                <option value="ZPK">ZPK / AWK / IWK (001 - LMK 06-07)</option>
+                <option value="TMK">TMK (002 - LMK 14-15)</option>
+                <option value="TPK">TPK (002 - LMK 14-15)</option>
+                <option value="PVK">PVK (002 - LMK 14-15)</option>
+                <option value="CVK">CVK (402 - LMK 14-15 Var 4)</option>
+                <option value="TAK">TAK (003 - LMK 16-17)</option>
+                <option value="ZAK">ZAK (008 - LMK 26-27)</option>
+                <option value="BDK">BDK (009 - LMK 28-29)</option>
+                <option value="MK-AC">MK-AC (109 - LMK 28-29)</option>
+                <option value="ZEK">ZEK (00A - LMK 30-31)</option>
+                <option value="DEK">DEK (00B - LMK 32-33)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Key Scheme (LMK)</label>
+              <select
+                value={a0Scheme}
+                onChange={(e) => setA0Scheme(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200"
+              >
+                <option value="U">U - Variant Double-Length 3DES (128-bit)</option>
+                <option value="T">T - Variant Triple-Length 3DES (192-bit)</option>
+                <option value="S">S - Thales Key Block Header + MAC</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">A0 Generation Mode</label>
+              <select
+                value={a0Mode}
+                onChange={(e) => setA0Mode(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200"
+              >
+                <option value="0">Mode 0 - Generate Under LMK Only</option>
+                <option value="1">Mode 1 - Generate Under LMK + Export Under ZMK</option>
+              </select>
+            </div>
+            {a0Mode === '1' && (
+              <div>
+                <label className="block text-slate-400 mb-1">Export ZMK Alias</label>
+                <input
+                  value={a0ZmkAlias}
+                  onChange={(e) => setA0ZmkAlias(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sky-300"
+                />
               </div>
             )}
           </div>
+          <button
+            onClick={handleGenerateA0}
+            className="bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 rounded text-white font-bold"
+          >
+            Execute Thales A0 on External Soft-HSM
+          </button>
+
+          {a0Result && (
+            <pre className="bg-slate-950 border border-slate-800 p-4 rounded text-emerald-300 overflow-x-auto">
+{`RAW REQUEST         : ${a0Result.raw_request}
+RAW RESPONSE        : ${a0Result.raw_response}
+KEY ALIAS           : ${a0Result.key.key_identifier} (v${a0Result.key.key_version})
+FORMAT INSPECTION   : ${a0Result.token_inspection.representation} (${a0Result.token_inspection.key_length_bits}-bit)
+MASKED LMK BLOCK    : ${a0Result.key.masked_key_block}
+KEY CHECK VALUE     : ${a0Result.key.kvc}
+LMK DOMAIN KCV      : ${a0Result.key.lmk_check_value}
+EXPORTED UNDER ZMK  : ${a0Result.exported_key_under_zmk || 'N/A (Mode 0)'}`}
+            </pre>
+          )}
         </div>
       )}
 
-      {/* TAB 3: ZMK TRANSLATION */}
-      {tab === 'ZMK' && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          <div className="lg:col-span-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-bold">Export Key Under Zone Master Key (ZMK)</h2>
-            <div className="space-y-3 text-xs font-mono">
-              <div>
-                <label className="block text-slate-400 mb-1">Select ZMK Key</label>
-                <select
-                  value={selectedZmkId}
-                  onChange={(e) => setSelectedZmkId(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-3 py-2"
-                >
-                  {keys.filter(k => k.key_type === 'ZMK').map(k => (
-                    <option key={k.id} value={k.key_identifier}>{k.key_identifier} ({k.key_name}) — KVC: {k.kvc}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-slate-400 mb-1">Key to Export Under ZMK</label>
-                <select
-                  value={exportKeyId}
-                  onChange={(e) => setExportKeyId(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-3 py-2"
-                >
-                  {keys.filter(k => k.key_type !== 'ZMK').map(k => (
-                    <option key={k.id} value={k.key_identifier}>{k.key_identifier} ({k.key_type}) — KVC: {k.kvc}</option>
-                  ))}
-                </select>
-              </div>
+      {/* TAB 3: A6 KEY IMPORT */}
+      {activeTab === 'a6_import' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 font-mono text-xs">
+          <h2 className="text-sm font-bold text-sky-400">
+            Import Working Key Encrypted Under ZMK into Soft-HSM LMK (Thales Command A6 / Response A7)
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-slate-400 mb-1">Imported Key Alias</label>
+              <input
+                value={a6Alias}
+                onChange={(e) => setA6Alias(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-sky-300"
+              />
             </div>
-            <button
-              onClick={handleExportUnderZmk}
-              className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-lg text-xs font-mono"
-            >
-              Export Under ZMK (Thales A6/A7) ➔
-            </button>
+            <div>
+              <label className="block text-slate-400 mb-1">Key Type</label>
+              <select
+                value={a6Type}
+                onChange={(e) => setA6Type(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200"
+              >
+                <option value="ZPK">ZPK (001)</option>
+                <option value="TPK">TPK / TMK / PVK (002)</option>
+                <option value="TAK">TAK (003)</option>
+                <option value="CVK">CVK (402)</option>
+                <option value="MK-AC">MK-AC (109)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Wrapping ZMK Alias (in Host DB)</label>
+              <input
+                value={a6ZmkAlias}
+                onChange={(e) => setA6ZmkAlias(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-amber-300"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-slate-400 mb-1">Key Encrypted Under ZMK (e.g. U + 32H from A8 Export)</label>
+              <input
+                value={a6EncKey}
+                onChange={(e) => setA6EncKey(e.target.value)}
+                placeholder="U06071111222233334444555566667777"
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-emerald-300"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Target LMK Scheme</label>
+              <select
+                value={a6Scheme}
+                onChange={(e) => setA6Scheme(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200"
+              >
+                <option value="U">U - Variant Double-Length</option>
+                <option value="S">S - Thales Key Block</option>
+              </select>
+            </div>
           </div>
+          <button
+            onClick={handleImportA6}
+            className="bg-sky-600 hover:bg-sky-500 px-5 py-2.5 rounded text-white font-bold"
+          >
+            Execute Thales A6 Import on External Soft-HSM
+          </button>
+          {a6Result && (
+            <pre className="bg-slate-950 border border-slate-800 p-4 rounded text-sky-300 overflow-x-auto">
+{`RAW REQUEST         : ${a6Result.raw_request}
+RAW RESPONSE        : ${a6Result.raw_response}
+IMPORTED ALIAS      : ${a6Result.key.key_identifier}
+MASKED LMK BLOCK    : ${a6Result.key.masked_key_block}
+KEY CHECK VALUE     : ${a6Result.key.kvc}`}
+            </pre>
+          )}
+        </div>
+      )}
 
-          <div className="lg:col-span-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
-            <h2 className="text-sm font-bold">Export Cryptogram Payload</h2>
-            {zmkExportResult ? (
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono space-y-2">
-                <div className="flex justify-between items-center text-emerald-400 font-bold border-b border-slate-800 pb-2">
-                  <span>Export Cryptogram:</span>
-                  <span className="text-amber-400">KCV: {zmkExportResult.key_kcv}</span>
-                </div>
-                <div className="text-slate-400">3DES Encrypted Under ZMK:</div>
-                <div className="p-2.5 rounded bg-slate-900 text-amber-300 break-all select-all font-bold">
-                  {zmkExportResult.encrypted_key_hex}
-                </div>
-                <div><span className="text-slate-400">ZMK KCV:</span> {zmkExportResult.zmk_kcv}</div>
-              </div>
-            ) : (
-              <div className="text-slate-400 text-xs font-mono py-12 text-center">
-                Select a key and ZMK to produce a transferable encrypted cryptogram.
-              </div>
-            )}
+      {/* TAB 4: A8 KEY EXPORT */}
+      {activeTab === 'a8_export' && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4 font-mono text-xs">
+          <h2 className="text-sm font-bold text-amber-400">
+            Export Working Key from LMK to ZMK Encryption (Thales Command A8 / Response A9)
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-slate-400 mb-1">Working Key Alias (Under LMK)</label>
+              <input
+                value={a8KeyAlias}
+                onChange={(e) => setA8KeyAlias(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-emerald-300"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Transport ZMK Alias (Under LMK)</label>
+              <input
+                value={a8ZmkAlias}
+                onChange={(e) => setA8ZmkAlias(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-amber-300"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1">Output ZMK Scheme</label>
+              <select
+                value={a8Scheme}
+                onChange={(e) => setA8Scheme(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-3 py-2 text-slate-200"
+              >
+                <option value="U">U - Variant 32H</option>
+                <option value="X">X - ANSI X9.17 32H</option>
+              </select>
+            </div>
           </div>
+          <button
+            onClick={handleExportA8}
+            className="bg-amber-600 hover:bg-amber-500 px-5 py-2.5 rounded text-white font-bold"
+          >
+            Execute Thales A8 Export on External Soft-HSM
+          </button>
+          {a8Result && (
+            <pre className="bg-slate-950 border border-slate-800 p-4 rounded text-amber-300 overflow-x-auto">
+{`RAW REQUEST         : ${a8Result.raw_request}
+RAW RESPONSE        : ${a8Result.raw_response}
+KEY UNDER ZMK       : ${a8Result.key_under_zmk}
+KEY CHECK VALUE     : ${a8Result.kcv}`}
+            </pre>
+          )}
+        </div>
+      )}
+
+      {/* TAB 5: PART G AUDIT DELIVERABLE */}
+      {activeTab === 'audit' && auditReport && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-3 font-mono text-xs">
+          <h2 className="text-sm font-bold text-emerald-400">
+            Part G: Verified Soft-HSM LMK & Key-Management Audit Deliverable
+          </h2>
+          <pre className="bg-slate-950 border border-slate-800 p-4 rounded text-slate-200 overflow-x-auto whitespace-pre-wrap">
+            {JSON.stringify(auditReport, null, 2)}
+          </pre>
         </div>
       )}
     </div>
   );
 };
+export default KeyCeremonyWorkbenchPage;
