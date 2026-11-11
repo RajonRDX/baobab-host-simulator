@@ -7,7 +7,7 @@ interface HsmAuthorityBadgeProps {
 
 export const HsmAuthoritySimulatorBar: React.FC<HsmAuthorityBadgeProps> = ({ onProviderChange }) => {
   const [status, setStatus] = useState<any>(null);
-  const [remoteUrl, setRemoteUrl] = useState<string>('http://127.0.0.1:8001');
+  const [remoteUrl, setRemoteUrl] = useState<string>('https://thales-10k-soft-hsm.onrender.com');
   const [switching, setSwitching] = useState<boolean>(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 

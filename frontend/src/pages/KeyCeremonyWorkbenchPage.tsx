@@ -28,7 +28,7 @@ export const KeyCeremonyWorkbenchPage: React.FC = () => {
   const [auditReport, setAuditReport] = useState<any>(null);
   const [keys, setKeys] = useState<KeyRecord[]>([]);
   const [providerFilter, setProviderFilter] = useState<string>('ACTIVE_PROVIDER');
-  const [remoteUrlInput, setRemoteUrlInput] = useState<string>('http://127.0.0.1:8001');
+  const [remoteUrlInput, setRemoteUrlInput] = useState<string>('https://thales-10k-soft-hsm.onrender.com');
   const [loading, setLoading] = useState<boolean>(false);
   const [banner, setBanner] = useState<{ type: 'ok' | 'err' | 'warn'; msg: string } | null>(null);
   const [activeTab, setActiveTab] = useState<'inventory' | 'a0_generate' | 'a6_import' | 'a8_export' | 'audit'>('inventory');
@@ -288,7 +288,7 @@ export const KeyCeremonyWorkbenchPage: React.FC = () => {
                   value={remoteUrlInput}
                   onChange={(e) => setRemoteUrlInput(e.target.value)}
                   className="flex-1 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-emerald-300 text-xs"
-                  placeholder="http://127.0.0.1:8001"
+                  placeholder="https://thales-10k-soft-hsm.onrender.com"
                 />
                 <button
                   onClick={handleSyncExternalKeys}

@@ -26,3 +26,5 @@ release/
 # [PATCH step00_02:gitignore_backups]
 _backups/
 
+
+*.bak_*
