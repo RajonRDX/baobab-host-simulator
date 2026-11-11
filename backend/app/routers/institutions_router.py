@@ -407,6 +407,7 @@ def create_institution(
     link = InstitutionProcessingSystem(
         institution_id=inst.id,
         processing_system_id=ps.id,
+        card_profile_id=getattr(payload, 'card_profile_id', None) or None,
         member_id=f"{ps.ps_code}-{icode}",
         acquirer_id=inst.acquirer_id,
         network_identifier=f"{ps.ps_code}_HOST",
@@ -785,6 +786,10 @@ def _serialize_bin(b: BinRange) -> Dict[str, Any]:
         "scheme": b.scheme,
         "country_code": b.country_code,
         "currency": b.currency,
+        # [PATCH step13_03:bins_include_card_profile]
+        "card_profile_id": getattr(b, "card_profile_id", None),
+        "card_profile_code": b.card_profile.profile_code if getattr(b, "card_profile", None) else None,
+        "card_profile_name": b.card_profile.profile_name if getattr(b, "card_profile", None) else None,
         "is_on_us": b.is_on_us,
         "status": b.status,
         "created_at": b.created_at,
@@ -954,6 +959,9 @@ def update_bin_range(
     b.bin_low = low_raw
     b.bin_high = high_raw
     b.pan_length = new_len
+
+    if "card_profile_id" in data:
+        b.card_profile_id = data["card_profile_id"] or None
 
     for k in ("institution_id", "processing_system_id", "card_type", "card_product", "scheme", "country_code", "currency", "is_on_us", "status"):
         if k in data and data[k] is not None:
@@ -1428,3 +1436,25 @@ def delete_pan_routing_rule(
     )
     db.commit()
     return {"status": "deleted", "rule_id": rule_id, "rule_code": code}
+
+# [PATCH step13_06:bins_alias_route]
+@router.get("/bins", response_model=List[BinRangeOut])
+def list_bins_alias(
+    q: Optional[str] = Query(None),
+    institution_id: Optional[str] = Query(None),
+    card_type: Optional[str] = Query(None),
+    scheme: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: str = Depends(get_current_user),
+):
+    return list_bin_ranges(
+        q=q,
+        institution_id=institution_id,
+        card_type=card_type,
+        scheme=scheme,
+        status=status,
+        db=db,
+        _=current_user,
+    )
+

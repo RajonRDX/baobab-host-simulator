@@ -1,6 +1,6 @@
 # E:\HOST_VSCODE\host-simulator\fix_host_simulator.py
 """
-Automated Patcher for BAOBAB Private Host Simulator
+Automated Patcher for RAJON Private Host Simulator
 Target Directory: E:\HOST_VSCODE\host-simulator
 """
 
@@ -848,7 +848,7 @@ def patch_api_routes(path: Path) -> None:
 
 def main():
     print("=" * 75)
-    print(f" Applying BAOBAB Host Simulator HSM Fixes in: {HOST_ROOT}")
+    print(f" Applying RAJON Host Simulator HSM Fixes in: {HOST_ROOT}")
     print("=" * 75)
 
     adapter_path = HOST_ROOT / "backend" / "app" / "hsm_adapter.py"

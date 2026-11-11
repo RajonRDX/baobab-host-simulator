@@ -124,17 +124,14 @@ def inspect_key_token_format(token_str: str) -> Dict[str, Any]:
     return {"valid": False, "reason": f"Unrecognized or unsafe key representation (len={len(tok)})"}
 
 
-DEFAULT_EXTERNAL_HSM_KEYS = [{'id': 'ext-zmk-main', 'key_identifier': 'ZMK_MAIN_EXT', 'base_identifier': 'ZMK_MAIN', 'key_name': 'External Zone Master Key (ZMK_MAIN)', 'key_type': 'ZMK', 'thales_key_type_code': '000', 'key_usage': 'ZONE_MASTER_KEY', 'key_scheme': 'U', 'encrypted_key_block': 'U56013B41F97E249F56013B41F97E249F', 'kvc': 'D3B82A', 'lmk_check_value': 'D3B82A0000000000'}, {'id': 'ext-tmk-pos-01', 'key_identifier': 'TMK_POS_01_EXT', 'base_identifier': 'TMK_POS_01', 'key_name': 'External Terminal Master Key (TMK_POS_01)', 'key_type': 'TMK', 'thales_key_type_code': '002', 'key_usage': 'TERMINAL_MASTER_KEY', 'key_scheme': 'U', 'encrypted_key_block': 'U8A49B26C1E3DF0758A49B26C1E3DF075', 'kvc': '9B760A', 'lmk_check_value': 'D3B82A0000000000'}, {'id': 'ext-awk-atm-01', 'key_identifier': 'AWK_ATM_01_EXT', 'base_identifier': 'AWK_ATM_01', 'key_name': 'External Acquirer Working PIN Key (AWK_ATM_01)', 'key_type': 'AWK', 'thales_key_type_code': '001', 'key_usage': 'ACQUIRER_WORKING_PIN_KEY', 'key_scheme': 'U', 'encrypted_key_block': 'U2B9A6F3C418E7D022B9A6F3C418E7D02', 'kvc': '4F81C2', 'lmk_check_value': 'D3B82A0000000000'}, {'id': 'ext-iwk-sw-01', 'key_identifier': 'IWK_SW_01_EXT', 'base_identifier': 'IWK_SW_01', 'key_name': 'External Issuer Working PIN Key (IWK_SW_01)', 'key_type': 'IWK', 'thales_key_type_code': '001', 'key_usage': 'ISSUER_WORKING_PIN_KEY', 'key_scheme': 'U', 'encrypted_key_block': 'U7D3E1A9B5C2048F67D3E1A9B5C2048F6', 'kvc': 'C8E419', 'lmk_check_value': 'D3B82A0000000000'}, {'id': 'ext-pvk-visa-01', 'key_identifier': 'PVK_VISA_01_EXT', 'base_identifier': 'PVK_VISA_01', 'key_name': 'External Visa PIN Verification Key (PVK_VISA_01)', 'key_type': 'PVK', 'thales_key_type_code': '002', 'key_usage': 'PIN_VERIFICATION_KEY', 'key_scheme': 'U', 'encrypted_key_block': 'U3E719A4C82B06DF53E719A4C82B06DF5', 'kvc': '782100', 'lmk_check_value': 'D3B82A0000000000'}, {'id': 'ext-mk-ac-emv01', 'key_identifier': 'MK_AC_EMV01_EXT', 'base_identifier': 'MK_AC_EMV01', 'key_name': 'External EMV Master Key AC (MK_AC_EMV01)', 'key_type': 'MK-AC', 'thales_key_type_code': '109', 'key_usage': 'EMV_MASTER_KEY_AC', 'key_scheme': 'U', 'encrypted_key_block': 'U9C42E81A6F03B7D49C42E81A6F03B7D4', 'kvc': 'A1B2C3', 'lmk_check_value': 'D3B82A0000000000'}, {'id': 'ext-cvk-main-01', 'key_identifier': 'CVK_MAIN_01_EXT', 'base_identifier': 'CVK_MAIN_01', 'key_name': 'External Card Verification Key (CVK_MAIN_01)', 'key_type': 'CVK', 'thales_key_type_code': '402', 'key_usage': 'CARD_VERIFICATION_KEY', 'key_scheme': 'U', 'encrypted_key_block': 'U6F10D53B9A842CE76F10D53B9A842CE7', 'kvc': '011000', 'lmk_check_value': 'D3B82A0000000000'}, {'id': 'ext-tak-mac-01', 'key_identifier': 'TAK_MAC_01_EXT', 'base_identifier': 'TAK_MAC_01', 'key_name': 'External Terminal Auth MAC Key (TAK_MAC_01)', 'key_type': 'TAK', 'thales_key_type_code': '003', 'key_usage': 'TERMINAL_AUTH_MAC_KEY', 'key_scheme': 'U', 'encrypted_key_block': 'U4A82C09E1D753BF84A82C09E1D753BF8', 'kvc': '112233', 'lmk_check_value': 'D3B82A0000000000'}]
-
-
 class ExternalSoftHSMBridge:
     """
     Low-level HTTP client to the External Thales payShield 10K Soft-HSM.
     Always sets `synthetic_mode=False` for key management so clear keys never leave the Soft-HSM.
     """
 
-    def __init__(self, remote_url: Optional[str] = None, timeout_seconds: int = 60):
-        raw_url = (remote_url or settings.HSM_REMOTE_URL or "https://thales-10k-soft-hsm.onrender.com/api/host/command").strip().rstrip("/")
+    def __init__(self, remote_url: Optional[str] = None, timeout_seconds: int = 45):
+        raw_url = (remote_url or settings.HSM_REMOTE_URL or "http://127.0.0.1:8000").strip().rstrip("/")
         if raw_url.endswith("/api/hsm/execute") or raw_url.endswith("/api/host/command") or raw_url.endswith("/api/hsm_api"):
             self.base_url = raw_url.rsplit("/api/", 1)[0]
             self.execute_url = raw_url
@@ -150,7 +147,7 @@ class ExternalSoftHSMBridge:
         raw_command: str,
         header_length: int = 4,
         synthetic_mode: bool = False,
-        source_host: str = "BAOBAB_HOST_KEY_MANAGER",
+        source_host: str = "RAJON_HOST_KEY_MANAGER",
     ) -> Dict[str, Any]:
         payload = json.dumps({
             "command": raw_command,
@@ -163,7 +160,7 @@ class ExternalSoftHSMBridge:
         req = urllib.request.Request(
             self.execute_url,
             data=payload,
-            headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "BAOBAB-Host-Simulator/1.0"},
+            headers={"Content-Type": "application/json"},
             method="POST",
         )
         try:
@@ -265,7 +262,7 @@ class LMKKeyManagementService:
                 "lmk_check_value": f"{kcv6}0000000000",
                 "lmk_kcv_short": kcv6,
                 "firmware": "INTERNAL-SIM-1.0",
-                "software_revision": "BAOBAB Internal Soft-HSM Core",
+                "software_revision": "RAJON Internal Soft-HSM Core",
                 "remote_url": settings.HSM_REMOTE_URL,
                 "key_counts": {"internal_keys": internal_count, "external_keys": external_count},
                 "persistence_audit": {
@@ -347,76 +344,6 @@ class LMKKeyManagementService:
                 "key_counts": {"internal_keys": internal_count, "external_keys": external_count},
             }
 
-    # [PATCH provider_switch_fast]
-    # LMK cryptograms copied from the live Soft-HSM (your own logs). All other keys are
-    # filled with the real tokens by "Sync Keys" (GET /api/keys), never by guesses.
-    _KNOWN_GOOD_TOKENS = {
-        "AWK_ATM_01_EXT": ("UC8E2A847DA7EC2F0C8E2A847DA7EC2F0", None),
-        "PVK_VISA_01_EXT": ("U56D33BE3768CF6DD56D33BE3768CF6DD", "141C6A"),
-    }
-
-    def seed_fallback_external_keys(self) -> List[str]:
-        """
-        LOCAL ONLY (no HTTP call) and NON-DESTRUCTIVE:
-          * creates a missing EXTERNAL_HSM row,
-          * never overwrites a token that was synced from the real Soft-HSM,
-          * only replaces an old placeholder token for AWK/PVK with the verified one.
-        """
-        placeholder = {i["key_identifier"]: i["encrypted_key_block"] for i in DEFAULT_EXTERNAL_HSM_KEYS}
-        seeded_aliases: List[str] = []
-        for item in DEFAULT_EXTERNAL_HSM_KEYS:
-            ext_alias = item["key_identifier"]
-            good_token, good_kvc = self._KNOWN_GOOD_TOKENS.get(ext_alias, (None, None))
-            token = good_token or item["encrypted_key_block"]
-            kvc_val = good_kvc or item["kvc"]
-
-            rec = (
-                self.db.query(HsmKeyReference)
-                .filter(HsmKeyReference.key_identifier == ext_alias)
-                .first()
-            )
-            if rec is None:
-                self.db.add(
-                    HsmKeyReference(
-                        key_name=item["key_name"],
-                        key_type=item["key_type"],
-                        key_usage=item["key_usage"],
-                        key_identifier=ext_alias,
-                        kvc=kvc_val,
-                        algorithm="3DES_2KEY",
-                        key_length=128,
-                        hsm_key_reference=token,
-                        encrypted_key_block=token,
-                        clear_key_hex=None,
-                        provider_type="EXTERNAL_HSM",
-                        thales_key_type_code=item["thales_key_type_code"],
-                        key_scheme=item["key_scheme"],
-                        key_version=1,
-                        lmk_id="00",
-                        lmk_check_value=item["lmk_check_value"],
-                        key_status="ACTIVE",
-                    )
-                )
-            elif rec.provider_type != "EXTERNAL_HSM":
-                rec.provider_type = "EXTERNAL_HSM"
-                rec.encrypted_key_block = token
-                rec.hsm_key_reference = token
-                rec.kvc = kvc_val
-                rec.thales_key_type_code = item["thales_key_type_code"]
-                rec.key_scheme = item["key_scheme"]
-                rec.lmk_id = "00"
-                rec.lmk_check_value = item["lmk_check_value"]
-                rec.clear_key_hex = None
-                rec.key_status = "ACTIVE"
-            elif good_token and rec.encrypted_key_block == placeholder.get(ext_alias):
-                rec.encrypted_key_block = good_token
-                rec.hsm_key_reference = good_token
-                rec.kvc = kvc_val
-            seeded_aliases.append(ext_alias)
-
-        self.db.commit()
-        return seeded_aliases
-
     def sync_default_external_keys(self, current_user: str = "admin") -> Dict[str, Any]:
         """
         Synchronizes the Soft-HSM's default LMK-encrypted keys (ZMK_MAIN, TMK_POS_01,
@@ -424,16 +351,9 @@ class LMKKeyManagementService:
         into the Host Simulator under provider_type='EXTERNAL_HSM' without storing any clear keys.
         Verifies each key token using the Soft-HSM BU (Generate KCV) command.
         """
-        self.seed_fallback_external_keys()
         lmk_status = self.get_lmk_and_provider_status()
         if not lmk_status.get("online"):
-            seeded = self.seed_fallback_external_keys()
-            return {
-                "status": "SYNCED_OFFLINE_FALLBACK",
-                "lmk_check_value": "D3B82A0000000000",
-                "synced_key_aliases": seeded,
-                "count": len(seeded),
-            }
+            raise ConnectionError(lmk_status.get("error") or "External Soft-HSM is offline")
 
         lmk_check_val = lmk_status["lmk_check_value"]
         remote_keys = self.bridge.fetch_seeded_remote_keys()
@@ -972,8 +892,7 @@ class LMKKeyManagementService:
           3. LMK domain compatibility (`lmk_check_value` must match the live Soft-HSM LMK domain)
           4. Valid LMK-encrypted key block (`U...`, `T...`, `S...`, `Z...`)
         """
-        base_id = key_identifier[:-4] if key_identifier.endswith("_EXT") else key_identifier
-        candidates = list(dict.fromkeys([key_identifier, f"{base_id}_EXT", base_id]))
+        candidates = [key_identifier, f"{key_identifier}_EXT"]
         rec = (
             self.db.query(HsmKeyReference)
             .filter(
@@ -983,17 +902,6 @@ class LMKKeyManagementService:
             .order_by(HsmKeyReference.key_version.desc())
             .first()
         )
-        if not rec:
-            self.seed_fallback_external_keys()
-            rec = (
-                self.db.query(HsmKeyReference)
-                .filter(
-                    HsmKeyReference.key_identifier.in_(candidates),
-                    HsmKeyReference.provider_type == "EXTERNAL_HSM",
-                )
-                .order_by(HsmKeyReference.key_version.desc())
-                .first()
-            )
         if not rec:
             internal_exists = (
                 self.db.query(HsmKeyReference)

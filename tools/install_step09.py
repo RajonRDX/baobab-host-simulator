@@ -335,7 +335,7 @@ def main() -> int:
                     "\n\n@router.post('/simulator/parse-raw', response_model=RawMessageParseResponse)\n"
                     "def parse_raw_wire_message(payload: RawMessageParseRequest, _: str = Depends(get_current_user)):\n"
                     "    msg = payload.raw_message.strip()\n"
-                    "    # Check if message is Compass Plus TIC/TCI (starts with A4M or contains A4M)\n"
+                    "    # Check if message is Rajon TIC/TCI (starts with A4M or contains A4M)\n"
                     "    if 'A4M' in msg:\n"
                     "        decoded = decode_tic_message(msg)\n"
                     "        if not decoded.get('valid'):\n"
@@ -378,7 +378,7 @@ def main() -> int:
                     "        mti='0200',\n"
                     "        fields={},\n"
                     "        detailed_fields={},\n"
-                    "        error='Unable to auto-detect message format (neither Compass Plus A4M TIC nor Standard ISO 8583)',\n"
+                    "        error='Unable to auto-detect message format (neither Rajon A4M TIC nor Standard ISO 8583)',\n"
                     "    )\n"
                 ),
             },
@@ -410,7 +410,7 @@ def main() -> int:
                     "\n  // Step 9: Restore persistent state from sessionStorage on mount\n"
                     "  useEffect(() => {\n"
                     "    try {\n"
-                    "      const saved = sessionStorage.getItem('BAOBAB_SIMULATOR_STATE');\n"
+                    "      const saved = sessionStorage.getItem('RAJON_SIMULATOR_STATE');\n"
                     "      if (saved) {\n"
                     "        const s = JSON.parse(saved);\n"
                     "        if (s.fields) setFields(s.fields);\n"
@@ -430,7 +430,7 @@ def main() -> int:
                     "  // Persist simulator state to sessionStorage whenever fields/options change\n"
                     "  useEffect(() => {\n"
                     "    try {\n"
-                    "      sessionStorage.setItem('BAOBAB_SIMULATOR_STATE', JSON.stringify({\n"
+                    "      sessionStorage.setItem('RAJON_SIMULATOR_STATE', JSON.stringify({\n"
                     "        fields,\n"
                     "        txCode,\n"
                     "        mti,\n"
@@ -443,7 +443,7 @@ def main() -> int:
                     "    } catch (e) {}\n"
                     "  }, [fields, txCode, mti, clearPinHelper, enabledFields, rawTic, compactTic, txResponse]);\n\n"
                     "  const resetToDefaults = () => {\n"
-                    "    sessionStorage.removeItem('BAOBAB_SIMULATOR_STATE');\n"
+                    "    sessionStorage.removeItem('RAJON_SIMULATOR_STATE');\n"
                     "    setTxCode('10');\n"
                     "    setMti('0200');\n"
                     "    setClearPinHelper('1234');\n"
@@ -535,7 +535,7 @@ def main() -> int:
                     '              <button onClick={() => setParseModalOpen(false)} className="text-slate-400 hover:text-white text-lg">×</button>\n'
                     '            </div>\n'
                     '            <p className="text-xs text-slate-500 font-sans">\n'
-                    '              Paste any raw wire string below. The host will auto-detect whether it is a Compass Plus TIC/TCI v2.164e message (A4M header) or standard ISO 8583:1987 message with hex bitmap, unpack all fields, and load them directly into your simulator editor.\n'
+                    '              Paste any raw wire string below. The host will auto-detect whether it is a Rajon TIC/TCI v2.164e message (A4M header) or standard ISO 8583:1987 message with hex bitmap, unpack all fields, and load them directly into your simulator editor.\n'
                     '            </p>\n'
                     '            <textarea\n'
                     '              rows={4}\n'
@@ -573,7 +573,7 @@ def main() -> int:
         completed=[
             "Created `backend/app/iso_standard_codec.py` implementing standard ISO 8583:1987 parsing and building (ASCII/Hex primary and secondary bitmaps).",
             "Added Pydantic schemas `RawMessageParseRequest` and `RawMessageParseResponse` in `backend/app/schemas.py`.",
-            "Added `POST /api/simulator/parse-raw` endpoint in `backend/app/api_routes.py` with automatic format detection between Compass Plus TIC/TCI v2.164e and Standard ISO 8583:1987.",
+            "Added `POST /api/simulator/parse-raw` endpoint in `backend/app/api_routes.py` with automatic format detection between Rajon TIC/TCI v2.164e and Standard ISO 8583:1987.",
             "Added `sessionStorage` persistence, auto-restore indicator, and reset buttons in `frontend/src/pages/SimulatorAndJournal.tsx`.",
             "Added Universal Wire Parser modal in `frontend/src/pages/SimulatorAndJournal.tsx` to paste and unpack wire messages directly into the simulator fields.",
             "Created automated Pytest test suite `backend/tests/test_step09_simulator_improvements.py`.",
@@ -595,7 +595,7 @@ def main() -> int:
         contract_items=[
             "**Module**: `backend/app/iso_standard_codec.py` (`decode_iso8583_1987`, `build_iso8583_1987`).",
             "**POST /api/simulator/parse-raw**: Accepts raw wire string, auto-detects `TIC_V2164E` (A4M) or `ISO8583_1987` (Hex bitmap), returns parsed fields and matched transaction code.",
-            "**Client-Side Persistence**: Simulator fields, helper PIN, and transaction checks persist in browser `sessionStorage` (`BAOBAB_SIMULATOR_STATE`), surviving navigation and page refreshes.",
+            "**Client-Side Persistence**: Simulator fields, helper PIN, and transaction checks persist in browser `sessionStorage` (`RAJON_SIMULATOR_STATE`), surviving navigation and page refreshes.",
         ],
     )
 

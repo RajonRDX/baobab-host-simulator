@@ -32,6 +32,28 @@ class CustomerCreate(BaseModel):
     customer_status: str = "ACTIVE"
     risk_category: str = "NORMAL"
     institution_id: Optional[str] = None
+    # [PATCH customer_360:schema_create]
+    father_name: Optional[str] = None
+    mother_name: Optional[str] = None
+    spouse_name: Optional[str] = None
+    gender: Optional[str] = None
+    marital_status: Optional[str] = None
+    nationality: Optional[str] = None
+    place_of_birth: Optional[str] = None
+    nid_number: Optional[str] = None
+    passport_number: Optional[str] = None
+    passport_expiry_date: Optional[date] = None
+    driving_license_number: Optional[str] = None
+    tin_number: Optional[str] = None
+    occupation: Optional[str] = None
+    employer_name: Optional[str] = None
+    alternate_mobile: Optional[str] = None
+    permanent_address: Optional[str] = None
+    city: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    kyc_status: Optional[str] = None
+    notes: Optional[str] = None
 
 
 # [PATCH step02_01:schema_customer_out_inst_fixed]
@@ -69,7 +91,7 @@ class CardCreate(BaseModel):
     test_pan_reference: str = Field(..., description="Synthetic 16-digit test PAN")
     cardholder_name: str
     expiry_month: int = Field(..., ge=1, le=12)
-    expiry_year: int = Field(..., ge=2024, le=2040)
+    expiry_year: int = Field(..., ge=2000, le=2099)
     card_type: str = "DEBIT"
     card_product: str = "VISA_DEBIT_CLASSIC"
     card_status: str = "ACTIVE"
@@ -414,6 +436,28 @@ class CustomerUpdate(BaseModel):
     customer_status: Optional[str] = None
     risk_category: Optional[str] = None
     institution_id: Optional[str] = None
+    # [PATCH customer_360:schema_update]
+    father_name: Optional[str] = None
+    mother_name: Optional[str] = None
+    spouse_name: Optional[str] = None
+    gender: Optional[str] = None
+    marital_status: Optional[str] = None
+    nationality: Optional[str] = None
+    place_of_birth: Optional[str] = None
+    nid_number: Optional[str] = None
+    passport_number: Optional[str] = None
+    passport_expiry_date: Optional[date] = None
+    driving_license_number: Optional[str] = None
+    tin_number: Optional[str] = None
+    occupation: Optional[str] = None
+    employer_name: Optional[str] = None
+    alternate_mobile: Optional[str] = None
+    permanent_address: Optional[str] = None
+    city: Optional[str] = None
+    postal_code: Optional[str] = None
+    country: Optional[str] = None
+    kyc_status: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class AccountUpdate(BaseModel):
@@ -430,7 +474,7 @@ class AccountUpdate(BaseModel):
 class CardUpdate(BaseModel):
     cardholder_name: Optional[str] = None
     expiry_month: Optional[int] = Field(None, ge=1, le=12)
-    expiry_year: Optional[int] = Field(None, ge=2024, le=2040)
+    expiry_year: Optional[int] = Field(None, ge=2000, le=2099)
     card_status: Optional[str] = None
     card_product: Optional[str] = None
     linked_account_id: Optional[str] = None
@@ -573,6 +617,9 @@ class CardGenerateRequest(BaseModel):
     card_product: str = 'VISA_DEBIT_CLASSIC'
     initial_pin: str = '1234'
     linked_account_id: Optional[str] = None
+    # [PATCH customer_360:gen_expiry]
+    expiry_month: Optional[int] = Field(None, ge=1, le=12)
+    expiry_year: Optional[int] = Field(None, ge=2000, le=2099)
 
 
 class PvvCalculateRequest(BaseModel):
@@ -667,6 +714,9 @@ class AuthorizerRuleUpdate(BaseModel):
     message: Optional[str] = None
     stop_on_match: Optional[bool] = None
     enabled: Optional[bool] = None
+    # [PATCH rules_checks:rule_update]
+    rule_mode: Optional[str] = None
+    conditions_json: Optional[Dict[str, Any]] = None
 
 
 class AuthorizerRuleOut(AuthorizerRuleCreate):
@@ -973,3 +1023,85 @@ class ExternalKeyRotateRequest(BaseModel):
 class HsmProviderSwitchRequest(BaseModel):
     provider_mode: str = Field(..., description="'INTERNAL_HSM' (SOFT_HSM_LOCAL) or 'EXTERNAL_HSM' (SOFT_HSM_REMOTE)")
     remote_url: Optional[str] = Field(None, description="Base URL or /api/host/command URL of External Soft-HSM")
+
+# [PATCH step13_01:export_limits_profiles_schemas]
+from app.schemas_limits_profiles import (  # noqa: E402, F401
+    LimitDefinitionBase,
+    LimitDefinitionCreate,
+    LimitDefinitionUpdate,
+    LimitDefinitionOut,
+    BinCardProfileAssignRequest,
+    AuthProfileTxPermissionCreate,
+    AuthProfileTxPermissionOut,
+    AuthProfileLimitAssignmentCreate,
+    AuthProfileLimitAssignmentOut,
+    TxCodeLimitImpactCreate,
+    TxCodeLimitImpactOut,
+    AuthorizationProfileCreate,
+    AuthorizationProfileUpdate,
+    AuthorizationProfileOut,
+    LimitEvaluationItemResult,
+)
+
+# [PATCH step13_06:bin_range_card_profile_schemas]
+# Override BinRangeCreate, BinRangeUpdate, and BinRangeOut to include card_profile_id & metadata
+class BinRangeCreate(BaseModel):
+    bin_prefix: str = Field(..., min_length=6, max_length=12, description="6 to 12 digit BIN prefix")
+    bin_low: Optional[str] = None
+    bin_high: Optional[str] = None
+    pan_length: int = 16
+    institution_id: str
+    processing_system_id: Optional[str] = None
+    card_profile_id: Optional[str] = None
+    card_type: str = "DEBIT"
+    card_product: str = "VISA_DEBIT_CLASSIC"
+    scheme: str = "ITCL"
+    country_code: str = "050"
+    currency: str = "BDT"
+    is_on_us: bool = True
+    status: str = "ACTIVE"
+
+
+class BinRangeUpdate(BaseModel):
+    bin_prefix: Optional[str] = None
+    bin_low: Optional[str] = None
+    bin_high: Optional[str] = None
+    pan_length: Optional[int] = None
+    institution_id: Optional[str] = None
+    processing_system_id: Optional[str] = None
+    card_profile_id: Optional[str] = None
+    card_type: Optional[str] = None
+    card_product: Optional[str] = None
+    scheme: Optional[str] = None
+    country_code: Optional[str] = None
+    currency: Optional[str] = None
+    is_on_us: Optional[bool] = None
+    status: Optional[str] = None
+
+
+class BinRangeOut(BaseModel):
+    id: str
+    bin_prefix: str
+    bin_low: str
+    bin_high: str
+    pan_length: int
+    institution_id: str
+    institution_code: Optional[str] = None
+    institution_name: Optional[str] = None
+    processing_system_id: str
+    ps_code: Optional[str] = None
+    ps_name: Optional[str] = None
+    card_profile_id: Optional[str] = None
+    card_profile_code: Optional[str] = None
+    card_profile_name: Optional[str] = None
+    card_type: str
+    card_product: str
+    scheme: str
+    country_code: str
+    currency: str
+    is_on_us: bool
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+

@@ -23,7 +23,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     # Application
-    APP_NAME: str = "BAOBAB Private Host Simulator"
+    APP_NAME: str = "RAJON Private Host Simulator"
     APP_ENV: str = "production"
 
     # Security
@@ -160,7 +160,7 @@ def seed_external_hsm_keys_if_needed(db: Session) -> None:
 
 # 4. Generate .env for Render & local production runs
 env_path = BASE_DIR / "backend" / ".env"
-env_content = """APP_NAME="BAOBAB Private Host Simulator"
+env_content = """APP_NAME="RAJON Private Host Simulator"
 APP_ENV=production
 DATABASE_URL=sqlite:///./baobab_host.db
 HSM_MODE=SOFT_HSM_REMOTE

@@ -1,5 +1,3 @@
-import logging
-logger = logging.getLogger(__name__)
 """
 seed_data.py
 Seeds the local development database with synthetic records:
@@ -7,7 +5,7 @@ Seeds the local development database with synthetic records:
 - 5 Accounts & Account Limits
 - 5 Synthetic Cards, Card Profiles, Card Limits, PIN Profiles, and EMV Profiles
 - Configurable Transaction Codes 10, 20, 30, 40 (administrator editable)
-- Response Codes & BAOBAB-inspired Host Parameters (AUTHORIZEACCTBALANCESTRANS, CHECKCARDLIMITS, etc.)
+- Response Codes & Rajon Host Parameters (AUTHORIZEACCTBALANCESTRANS, CHECKCARDLIMITS, etc.)
 - HSM Key References (metadata & KVCs only, never clear production keys)
 """
 
@@ -73,14 +71,14 @@ def seed_initial_data(db: Session) -> None:
     for code, desc, cat, app in response_codes:
         db.add(ResponseCode(response_code=code, response_description=desc, response_category=cat, approved_flag=app))
 
-    # 2. BAOBAB-inspired Host Parameters
+    # 2. Rajon Host Parameters
     host_params = [
-        ("BAOBAB_AUTH_RULES", "AUTHORIZEACCTBALANCESTRANS", {"enabled": True, "order": 8}, "Verify available account balance & overdraft during financial debit authorization"),
-        ("BAOBAB_AUTH_RULES", "CHECKCARDLIMITS", {"enabled": True, "order": 6}, "Evaluate ATH_CARDLIMIT per-transaction, daily, weekly, and monthly card limits"),
-        ("BAOBAB_AUTH_RULES", "CHECKACCT2CARDLIMITS", {"enabled": True, "order": 7}, "Evaluate account-level transaction and velocity limits"),
-        ("BAOBAB_AUTH_RULES", "DEFAULTREQUESTFUNCTION", {"enabled": True, "function": "HostTransactionProcessor.process_transaction"}, "Default incoming TIC/ISO authorization router"),
-        ("BAOBAB_AUTH_RULES", "DEFAULTRESPONSEFUNCTION", {"enabled": True, "function": "build_tic_message"}, "Default TIC v2.164e response builder"),
-        ("BAOBAB_AUTH_RULES", "POSRESPONSECONTROLFUNCTION", {"enabled": True, "include_f105_balance": True}, "Controls response code mapping and F105 balance output"),
+        ("RAJON_AUTH_RULES", "AUTHORIZEACCTBALANCESTRANS", {"enabled": True, "order": 8}, "Verify available account balance & overdraft during financial debit authorization"),
+        ("RAJON_AUTH_RULES", "CHECKCARDLIMITS", {"enabled": True, "order": 6}, "Evaluate ATH_CARDLIMIT per-transaction, daily, weekly, and monthly card limits"),
+        ("RAJON_AUTH_RULES", "CHECKACCT2CARDLIMITS", {"enabled": True, "order": 7}, "Evaluate account-level transaction and velocity limits"),
+        ("RAJON_AUTH_RULES", "DEFAULTREQUESTFUNCTION", {"enabled": True, "function": "HostTransactionProcessor.process_transaction"}, "Default incoming TIC/ISO authorization router"),
+        ("RAJON_AUTH_RULES", "DEFAULTRESPONSEFUNCTION", {"enabled": True, "function": "build_tic_message"}, "Default TIC v2.164e response builder"),
+        ("RAJON_AUTH_RULES", "POSRESPONSECONTROLFUNCTION", {"enabled": True, "include_f105_balance": True}, "Controls response code mapping and F105 balance output"),
     ]
     for grp, name, val, desc in host_params:
         db.add(HostParameter(parameter_group=grp, parameter_name=name, parameter_value=val, description=desc))
@@ -101,7 +99,7 @@ def seed_initial_data(db: Session) -> None:
             network_name="INTERNAL_SIMULATOR_TIC",
             network_type="INTERNAL_SIMULATION",
             enabled=True,
-            configuration_json={"protocol": "Compass Plus TW TIC/TCI v2.164e", "live_external_connections": False},
+            configuration_json={"protocol": "Rajon TIC/TCI v2.164e", "live_external_connections": False},
         )
     )
 
@@ -329,11 +327,6 @@ def seed_initial_data(db: Session) -> None:
         )
 
     db.commit()
-    try:
-        from app.lmk_key_management_service import LMKKeyManagementService
-        LMKKeyManagementService(db).seed_fallback_external_keys()
-    except Exception:
-        logger.exception("Failed to seed fallback external HSM keys at startup")
 
 # [PATCH step01_01:seed_ps_and_institutions_fn]
 def seed_processing_systems_and_institutions(db: Session) -> None:
@@ -361,7 +354,7 @@ def seed_processing_systems_and_institutions(db: Session) -> None:
             True,
             True,
             {
-                "protocol": "Compass Plus TW TIC/TCI v2.164e",
+                "protocol": "Rajon TIC/TCI v2.164e",
                 "country": "BD",
                 "default_currency": "BDT",
                 "header_h1": "A4M",
@@ -410,7 +403,7 @@ def seed_processing_systems_and_institutions(db: Session) -> None:
         ),
         (
             "INTERNAL",
-            "BAOBAB Internal Host Loopback",
+            "RAJON Internal Host Loopback",
             "INTERNAL",
             "TIC_V2164E",
             True,
@@ -572,3 +565,13 @@ def seed_processing_systems_and_institutions(db: Session) -> None:
 
     db.commit()
 
+# [PATCH step13_01:seed_limits_and_auth_profiles]
+from app.seed_limits_profiles import seed_limits_and_authorization_profiles  # noqa: E402
+
+# Wrap seed_initial_data so it always runs seed_limits_and_authorization_profiles(db)
+_orig_seed_initial_data = seed_initial_data
+
+
+def seed_initial_data(db: Session) -> None:
+    _orig_seed_initial_data(db)
+    seed_limits_and_authorization_profiles(db)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BAOBAB Host Simulator <-> Thales payShield 10K External Soft-HSM
+RAJON Host Simulator <-> Thales payShield 10K External Soft-HSM
 Universal Cryptographic, Wire-Format & Simulator Indicator Patcher
 """
 import os
@@ -24,7 +24,7 @@ def backup_file(path: Path):
 # ============================================================================
 UNIVERSAL_BRIDGE_CODE = r'''
 # ============================================================================
-# BAOBAB <-> THALES 10K UNIVERSAL DUAL-FORMAT CRYPTOGRAPHIC BRIDGE
+# RAJON <-> THALES 10K UNIVERSAL DUAL-FORMAT CRYPTOGRAPHIC BRIDGE
 # ============================================================================
 from Crypto.Cipher import DES3, DES
 
@@ -127,7 +127,7 @@ def universal_intercept_command(raw_message: str, header_len: int = 4, lmk_decry
         resp_prefix = "DD" if cmd == "DC" else "ED"
         try:
             if len(rest) > 4 and rest[:2].isdigit() and rest[2] in ("U", "T", "X", "Y", "S"):
-                layout_mode = "BAOBAB_HOST_FORMAT"
+                layout_mode = "RAJON_HOST_FORMAT"
                 pin_fmt = rest[:2]
                 tpk_tok, idx = _read_thales_key_token(rest, 2)
                 pin_block = rest[idx : idx + 16]; idx += 16
@@ -248,14 +248,14 @@ def patch_external_soft_hsm():
             if "universal_intercept_command" not in text:
                 text = text + "\n" + UNIVERSAL_BRIDGE_CODE
 
-            if ("/api/host/command" in text or "/api/hsm/execute" in text) and "_baobab_universal_hook" not in text:
+            if ("/api/host/command" in text or "/api/hsm/execute" in text) and "_rajon_universal_hook" not in text:
                 hook_block = r'''
-# --- BAOBAB Universal Command Pre-Processor Middleware ---
+# --- RAJON Universal Command Pre-Processor Middleware ---
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
 @app.middleware("http")
-async def _baobab_universal_hook(request: Request, call_next):
+async def _rajon_universal_hook(request: Request, call_next):
     if request.method == "POST" and request.url.path in ("/api/host/command", "/api/hsm/execute", "/api/hsm_api"):
         try:
             body_bytes = await request.body()
@@ -312,8 +312,8 @@ export const api = axios.create({
 api.interceptors.request.use((config) => {
   const token =
     getToken() ||
-    sessionStorage.getItem('BAOBAB_AUTH_TOKEN') ||
-    localStorage.getItem('BAOBAB_AUTH_TOKEN') ||
+    sessionStorage.getItem('RAJON_AUTH_TOKEN') ||
+    localStorage.getItem('RAJON_AUTH_TOKEN') ||
     sessionStorage.getItem('token') ||
     localStorage.getItem('token');
 
@@ -332,7 +332,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      sessionStorage.removeItem('BAOBAB_AUTH_TOKEN');
+      sessionStorage.removeItem('RAJON_AUTH_TOKEN');
       window.location.hash = '#/login';
     }
     return Promise.reject(error);
@@ -351,7 +351,7 @@ interface HsmAuthorityBadgeProps {
 
 export const HsmAuthoritySimulatorBar: React.FC<HsmAuthorityBadgeProps> = ({ onProviderChange }) => {
   const [status, setStatus] = useState<any>(null);
-  const [remoteUrl, setRemoteUrl] = useState<string>('https://thales-10k-soft-hsm.onrender.com');
+  const [remoteUrl, setRemoteUrl] = useState<string>('http://127.0.0.1:8001');
   const [switching, setSwitching] = useState<boolean>(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
@@ -383,7 +383,7 @@ export const HsmAuthoritySimulatorBar: React.FC<HsmAuthorityBadgeProps> = ({ onP
         remote_url: remoteUrl.trim(),
       });
       setStatus(res.data);
-      sessionStorage.setItem('BAOBAB_HSM_MODE', mode);
+      sessionStorage.setItem('RAJON_HSM_MODE', mode);
       if (mode === 'EXTERNAL_HSM') {
         try {
           const syncRes = await api.post('/api/hsm/lmk-key-management/sync-seeded');
@@ -479,7 +479,7 @@ def patch_host_simulator():
     services_api_path.parent.mkdir(parents=True, exist_ok=True)
     backup_file(services_api_path)
     services_api_path.write_text(FIXED_SERVICES_API_TS, encoding="utf-8")
-    print(f"  [+] Updated {services_api_path.relative_to(HOST_SIM_ROOT)} with BAOBAB_AUTH_TOKEN support")
+    print(f"  [+] Updated {services_api_path.relative_to(HOST_SIM_ROOT)} with RAJON_AUTH_TOKEN support")
 
     comp_dir = HOST_SIM_ROOT / "frontend" / "src" / "components"
     comp_dir.mkdir(parents=True, exist_ok=True)
@@ -512,15 +512,15 @@ def patch_host_simulator():
         cfg_text = config_py.read_text(encoding="utf-8", errors="ignore").replace("\xa0", " ")
         cfg_text = re.sub(
             r'HSM_REMOTE_URL:\s*str\s*=\s*"[^"]*"',
-            'HSM_REMOTE_URL: str = "https://thales-10k-soft-hsm.onrender.com/api/host/command"',
+            'HSM_REMOTE_URL: str = "http://127.0.0.1:8001/api/host/command"',
             cfg_text,
         )
         config_py.write_text(cfg_text, encoding="utf-8")
-        print("  [+] Cleaned & pointed backend/app/config.py HSM_REMOTE_URL -> https://thales-10k-soft-hsm.onrender.com/api/host/command")
+        print("  [+] Cleaned & pointed backend/app/config.py HSM_REMOTE_URL -> http://127.0.0.1:8001/api/host/command")
 
 if __name__ == "__main__":
     print("==================================================================")
-    print(" BAOBAB HOST <-> EXTERNAL SOFT-HSM UNIVERSAL PATCHER")
+    print(" RAJON HOST <-> EXTERNAL SOFT-HSM UNIVERSAL PATCHER")
     print("==================================================================")
     patch_external_soft_hsm()
     patch_host_simulator()

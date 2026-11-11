@@ -29,7 +29,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase
 
-logger = logging.getLogger("baobab.schema_sync")
+logger = logging.getLogger("rajon.schema_sync")
 
 
 def _compile_column_type(column, dialect) -> str:
@@ -198,7 +198,7 @@ def main() -> int:
     else:
         session.write_file(
             ".gitignore",
-            "# BAOBAB Host Simulator .gitignore\n_backups/\n__pycache__/\n*.py[cod]\n.venv/\nvenv/\nnode_modules/\ndist/\n.env\n",
+            "# RAJON Host Simulator .gitignore\n_backups/\n__pycache__/\n*.py[cod]\n.venv/\nvenv/\nnode_modules/\ndist/\n.env\n",
         )
 
     # 2. Write backend/app/schema_sync.py

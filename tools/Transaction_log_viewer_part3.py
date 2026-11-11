@@ -360,8 +360,8 @@ const ALL_COLUMNS: ColumnDef[] = [
 ];
 
 const DEFAULT_VISIBLE_KEYS = ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key);
-const STORAGE_KEY_COLS = 'baobab_tx_log_viewer_columns_v1';
-const STORAGE_KEY_REFRESH = 'baobab_tx_log_viewer_refresh_v1';
+const STORAGE_KEY_COLS = 'rajon_tx_log_viewer_columns_v1';
+const STORAGE_KEY_REFRESH = 'rajon_tx_log_viewer_refresh_v1';
 
 interface FilterState {
   transaction_id: string;
@@ -419,7 +419,7 @@ const EMPTY_FILTERS: FilterState = {
 
 function getAuthHeaders(): Record<string, string> {
   const token =
-    localStorage.getItem('baobab_token') ||
+    localStorage.getItem('rajon_token') ||
     localStorage.getItem('token') ||
     localStorage.getItem('access_token') ||
     sessionStorage.getItem('token') ||
@@ -713,7 +713,7 @@ export const TransactionLogViewerPage: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `baobab_transactions_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.csv`;
+      a.download = `rajon_transactions_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -1380,7 +1380,7 @@ export const TransactionLogViewerPage: React.FC = () => {
                 <tr>
                   <td colSpan={activeColumns.length + 1} className="py-12 text-center text-slate-400 font-sans">
                     <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin mx-auto mb-2" />
-                    Loading latest transactions from BAOBAB host database...
+                    Loading latest transactions from RAJON host database...
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
@@ -2344,7 +2344,7 @@ const TransactionInvestigationModal: React.FC<InvestigationModalProps> = ({
                           {dec.compact_tic && (
                             <div className="bg-slate-950 border border-amber-500/30 rounded-xl p-4">
                               <div className="text-[11px] font-semibold uppercase text-amber-400 mb-1.5">
-                                Compass Plus TIC Compact Format (Ý / ³ Delimiters)
+                                Rajon TIC Compact Format (Ý / ³ Delimiters)
                               </div>
                               <pre className="font-mono text-xs text-amber-200 whitespace-pre-wrap break-all">
                                 {dec.compact_tic}
@@ -2955,7 +2955,7 @@ def main():
     args = parser.parse_args()
 
     root = detect_project_root(args.project_root)
-    print(f"=== BAOBAB Transaction Log Viewer Installer v3 (Final) ===\nProject Root: {root}\nDry Run: {args.dry_run}")
+    print(f"=== RAJON Transaction Log Viewer Installer v3 (Final) ===\nProject Root: {root}\nDry Run: {args.dry_run}")
     installer = SafeInstaller(root, dry_run=args.dry_run)
     apply_v3(installer)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-tools/fix_all_v2.py — BAOBAB Host Simulator: consolidated fix + Customer-Maintenance 360 rebuild
+tools/fix_all_v2.py — RAJON Host Simulator: consolidated fix + Customer-Maintenance 360 rebuild
 ==============================================================================================
 
 Run from anywhere:

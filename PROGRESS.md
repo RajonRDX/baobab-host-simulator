@@ -1,4 +1,4 @@
-# BAOBAB PRIVATE HOST SIMULATOR — IMPLEMENTATION PROGRESS
+# RAJON PRIVATE HOST SIMULATOR — IMPLEMENTATION PROGRESS
 
 Authoritative execution log updated automatically by `tools/patcher.py`.
 
@@ -6,7 +6,7 @@ Authoritative execution log updated automatically by `tools/patcher.py`.
 - **Backend**: FastAPI, SQLAlchemy 2.0, Pydantic v2, SQLite/PostgreSQL (`backend/app/`)
 - **Core Engine**: `HostTransactionProcessor` (`backend/app/host_engine.py`)
 - **Soft-HSM**: `SoftHsmCryptoCore` & `HSMAdapter` (`backend/app/hsm_adapter.py`)
-- **Wire Codec**: Compass Plus TW TIC/TCI v2.164e (`backend/app/iso_tic.py`)
+- **Wire Codec**: Rajon TIC/TCI v2.164e (`backend/app/iso_tic.py`)
 - **Frontend**: React 18, TypeScript, Tailwind CSS, 16 views (`frontend/src/`)
 <!-- PROGRESS:step00_01 -->
 ## [2026-11-01 11:47:55] `step00_01` — Bootstrap Reusable Installer & Patcher Framework
@@ -120,7 +120,7 @@ Authoritative execution log updated automatically by `tools/patcher.py`.
 - **Touched Files**: `backend/app/iso_standard_codec.py`, `backend/app/schemas.py`, `backend/app/api_routes.py`, `frontend/src/pages/SimulatorAndJournal.tsx`, `backend/tests/test_step09_simulator_improvements.py`
 - [x] **Completed**: Created `backend/app/iso_standard_codec.py` implementing standard ISO 8583:1987 parsing and building (ASCII/Hex primary and secondary bitmaps).
 - [x] **Completed**: Added Pydantic schemas `RawMessageParseRequest` and `RawMessageParseResponse` in `backend/app/schemas.py`.
-- [x] **Completed**: Added `POST /api/simulator/parse-raw` endpoint in `backend/app/api_routes.py` with automatic format detection between Compass Plus TIC/TCI v2.164e and Standard ISO 8583:1987.
+- [x] **Completed**: Added `POST /api/simulator/parse-raw` endpoint in `backend/app/api_routes.py` with automatic format detection between Rajon TIC/TCI v2.164e and Standard ISO 8583:1987.
 - [x] **Completed**: Added `sessionStorage` persistence, auto-restore indicator, and reset buttons in `frontend/src/pages/SimulatorAndJournal.tsx`.
 - [x] **Completed**: Added Universal Wire Parser modal in `frontend/src/pages/SimulatorAndJournal.tsx` to paste and unpack wire messages directly into the simulator fields.
 - [x] **Completed**: Created automated Pytest test suite `backend/tests/test_step09_simulator_improvements.py`.
@@ -197,3 +197,40 @@ Authoritative execution log updated automatically by `tools/patcher.py`.
 - [x] **Completed**: Last session is restored on open; named cases can be saved, opened and deleted.
 - [x] **Completed**: Removed the Load Real Backend Test Scenario bar and redesigned the page.
 - **Known Issues**: None
+
+<!-- PROGRESS:step13_01 -->
+## [2026-11-08 21:51:48] `step13_01` — Batch 1: Normalized Database Models, Schema Sync & Pydantic v2 Schemas for Limits & Authorization Profiles
+- **Touched Files**: `backend/app/models_limits_profiles.py`, `backend/app/schemas_limits_profiles.py`, `backend/app/seed_limits_profiles.py`, `backend/app/models.py`, `backend/app/schemas.py`, `backend/app/seed_data.py`
+- [x] **Completed**: Added normalized SQLAlchemy 2.0 models (`LimitDefinition`, `AuthorizationProfile`, `AuthProfileTxCodePermission`, `AuthProfileLimitAssignment`, `TxCodeLimitImpact`, `LimitUsageRecord`, `LimitTransactionConsumption`, `LimitEvaluationAudit`).
+- [x] **Completed**: Extended `BinRange` with `card_profile_id` and `CardProfile` with `description`, `institution_id`, `processing_system_id`, `card_type`, and `currency`.
+- [x] **Completed**: Added Pydantic v2 schemas and idempotent default seeding.
+- [ ] **Next / Remaining**: Batch 2 (`tools/install_step13_02.py`) — `backend/app/limit_engine.py`.
+
+<!-- PROGRESS:step13_02 -->
+## [2026-11-08 21:52:01] `step13_02` — Batch 2: Configurable Limit Calculation & Authorization Profile Engine
+- **Touched Files**: `backend/app/limit_engine.py`, `PROGRESS.md`
+- [x] **Completed**: Created `LimitCalculationEngine` in `backend/app/limit_engine.py` supporting `CARD` and `ACCOUNT` scopes, all 6 comparison operators (`>`, `<`, `>=`, `<=`, `=`, `!=`), all 8 calculation methods (`COUNT_TRANSACTION`, `SUM_TRANSACTION_AMOUNT`, `MAX_SINGLE_TRANSACTION`, `MIN_SINGLE_TRANSACTION`, `SUM_CASH_WITHDRAWAL`, `SUM_PURCHASE`, `SUM_TRANSFER`, `CUSTOM_SUPPORTED_AGGREGATION`), and configurable reset windows (`DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`, `PER_TRANSACTION`, `CUSTOM_HOURS`).
+- [x] **Completed**: Implemented BIN -> Card Profile -> Authorization Profile resolution, transaction-code permission checks, transaction-code limit impact rules (`INCREASE`, `DECREASE`, `NO_IMPACT`), atomic post-approval usage commits, and idempotent reversal restoration.
+- [ ] **Next / Remaining**: Batch 3 (`tools/install_step13_03.py`) — REST API Router (`limits_and_profiles_router.py`) and `HostTransactionProcessor` (`host_engine.py`) integration.
+
+<!-- PROGRESS:step13_03 -->
+## [2026-11-08 21:52:07] `step13_03` — Batch 3: Limits & Authorization Profiles API Router and HostTransactionProcessor Integration
+- **Touched Files**: `backend/app/routers/limits_and_profiles_router.py`, `backend/app/host_engine.py`, `backend/app/api_routes.py`, `backend/app/routers/institutions_router.py`, `backend/app/main.py`, `PROGRESS.md`
+- [x] **Completed**: Created `backend/app/routers/limits_and_profiles_router.py` with full CRUD, dependency protection (409 Conflict / safe archive), and audit logging for Card Limits, Account Limits, Card Profiles, BIN-to-Profile links, and Authorization Profiles (Tabs A, B, C, D).
+- [x] **Completed**: Integrated `LimitCalculationEngine` into `HostTransactionProcessor` (`backend/app/host_engine.py`) with post-approval usage commits and reversal (`0400`/`0420`) usage restoration.
+- [x] **Completed**: Updated Card creation in `backend/app/api_routes.py` so cards created under a BIN automatically inherit the BIN's `card_profile_id` unless overridden.
+- [ ] **Next / Remaining**: Batch 4 (`tools/install_step13_04.py`) — Frontend React Pages (`LimitManagementPage.tsx`, `AuthorizationProfilesPage.tsx`, `InstitutionsAndBinsPage.tsx`, `App.tsx`, `Layout.tsx`).
+
+<!-- PROGRESS:step13_04 -->
+## [2026-11-08 21:52:18] `step13_04` — Batch 4: React TypeScript Frontend Workbench for Limits, Card Profiles & Authorization Profiles
+- **Touched Files**: `frontend/src/pages/LimitManagementPage.tsx`, `frontend/src/pages/AuthorizationProfilesPage.tsx`, `frontend/src/pages/CardProfilesUnderBinTab.tsx`, `frontend/src/pages/InstitutionsAndBinsPage.tsx`, `frontend/src/App.tsx`, `frontend/src/components/Layout.tsx`, `PROGRESS.md`
+- [x] **Completed**: Created `LimitManagementPage.tsx` for Card Limits and Account Limits with live usage progress bars, operator badges, reset schedules, and protected deletion/deactivation modals.
+- [x] **Completed**: Created `AuthorizationProfilesPage.tsx` with 4-tab workbench (Tab A: Allowed Transactions, Tab B: Card Limits, Tab C: Account Limits, Tab D: Transaction Code Limit Impact) and pre-save configuration summary modal.
+- [x] **Completed**: Added `CardProfilesUnderBinTab.tsx` under Bank / Switch / BIN Management and wired navigation in `App.tsx` and `Layout.tsx` with Authorization Profiles positioned before Authorization Rules.
+- [ ] **Next / Remaining**: Batch 5 (`tools/install_step13_05.py`) — Comprehensive Automated Pytest Suite (`backend/tests/test_step13_limits_and_profiles.py`).
+
+<!-- PROGRESS:step13_05 -->
+## [2026-11-08 21:52:25] `step13_05` — Batch 5: Comprehensive Automated Pytest Suite & Final Acceptance
+- **Touched Files**: `backend/tests/test_step13_limits_and_profiles.py`, `PROGRESS.md`
+- [x] **Completed**: Created automated Pytest test suite `backend/tests/test_step13_limits_and_profiles.py` verifying operators, reset windows, BIN-to-Card-Profile inheritance, authorization profile evaluation, limit exceedance, approved usage commitment, and idempotent reversal restoration.
+- [x] **Completed**: All final acceptance criteria successfully fulfilled for Advanced Card Limit Management, Account Limit Management, Card Profiles, Authorization Profiles, and Limit Calculation Engine.

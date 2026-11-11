@@ -13,6 +13,8 @@ export const CardCryptoLabPage: React.FC = () => {
   const [cardholderName, setCardholderName] = useState('TEST CARDHOLDER');
   const [cardType, setCardType] = useState('DEBIT');
   const [initialPin, setInitialPin] = useState('1234');
+  const [expMonth, setExpMonth] = useState<number>(new Date().getMonth() + 1);
+  const [expYear, setExpYear] = useState<string>(String(new Date().getFullYear() + 3));
   const [generatedCard, setGeneratedCard] = useState<any | null>(null);
 
   // 2. PVV & Offset State
@@ -52,6 +54,8 @@ export const CardCryptoLabPage: React.FC = () => {
           cardholder_name: cardholderName,
           card_type: cardType,
           initial_pin: initialPin,
+          expiry_month: expMonth,
+          expiry_year: Number(expYear) || undefined,
         }),
       });
       setGeneratedCard(res);
@@ -191,6 +195,28 @@ export const CardCryptoLabPage: React.FC = () => {
                     maxLength={4}
                     className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-3 py-2"
                   />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-slate-400 mb-1">Expiry (MM / YYYY)</label>
+                  <div className="flex gap-2">
+                    <select
+                      value={expMonth}
+                      onChange={(e) => setExpMonth(Number(e.target.value))}
+                      className="w-24 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-3 py-2"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="number"
+                      min={2000}
+                      max={2099}
+                      value={expYear}
+                      onChange={(e) => setExpYear(e.target.value)}
+                      className="flex-1 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-3 py-2"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

@@ -58,7 +58,7 @@ export const LoginPage: React.FC = () => {
             <ShieldCheck size={28} />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">BAOBAB Private Host</h1>
+            <h1 className="text-xl font-bold text-white tracking-tight">RAJON Private Host</h1>
             <p className="text-xs font-mono text-slate-400">Single-User Payment Switch & HSM Simulator</p>
           </div>
         </div>

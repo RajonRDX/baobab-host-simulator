@@ -2,7 +2,7 @@
 """
 fix_all_issues_part3.py (Part 3 of 3 — Frontend React/TypeScript & Automated Test Suite)
 ========================================================================================
-BAOBAB Private Host Simulator — Enterprise Payment Switch Frontend Repair & Test Pack
+RAJON Private Host Simulator — Enterprise Payment Switch Frontend Repair & Test Pack
 
 Delivers:
   1. Bank Name Display Normalization:
@@ -657,7 +657,7 @@ export const InstitutionsAndBinsPage: React.FC = () => {
                 onChange={(e) => setPsForm({ ...psForm, message_format: e.target.value })}
                 className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-2 text-xs font-mono"
               >
-                <option value="TIC_V2164E">Compass Plus TIC v2.164e</option>
+                <option value="TIC_V2164E">Rajon TIC v2.164e</option>
                 <option value="ISO8583_1987">Standard ISO 8583:1987</option>
               </select>
             </div>
@@ -1190,7 +1190,7 @@ export const InstitutionsAndBinsPage: React.FC = () => {
                   onChange={(e) => setEditPsModal({ ...editPsModal, message_format: e.target.value })}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5"
                 >
-                  <option value="TIC_V2164E">Compass Plus TIC v2.164e</option>
+                  <option value="TIC_V2164E">Rajon TIC v2.164e</option>
                   <option value="ISO8583_1987">Standard ISO 8583:1987</option>
                 </select>
               </div>
@@ -1653,7 +1653,7 @@ def apply_part3(engine: SafeRepairEngine) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="BAOBAB Payment Switch Repair — Part 3 (Frontend & Tests)")
+    parser = argparse.ArgumentParser(description="RAJON Payment Switch Repair — Part 3 (Frontend & Tests)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without modifying disk")
     args = parser.parse_args()
 

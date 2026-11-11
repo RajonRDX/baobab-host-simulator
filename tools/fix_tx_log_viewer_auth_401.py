@@ -22,8 +22,8 @@ def detect_root() -> Path:
 
 AUTH_HELPER_REPLACEMENT = r'''function findStoredJwtToken(): string {
   const candidateKeys = [
-    'baobab_auth_token',
-    'baobab_token',
+    'rajon_auth_token',
+    'rajon_token',
     'host_token',
     'auth_token',
     'token',
@@ -84,7 +84,7 @@ async function ensureSimulatorToken(): Promise<string | null> {
       if (!resp.ok) return null;
       const data = await resp.json();
       if (data?.access_token) {
-        localStorage.setItem('baobab_token', data.access_token);
+        localStorage.setItem('rajon_token', data.access_token);
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('access_token', data.access_token);
         return data.access_token as string;
@@ -130,7 +130,7 @@ def patch_frontend_page(root: Path) -> None:
 
     old_auth_fn = '''function getAuthHeaders(): Record<string, string> {
   const token =
-    localStorage.getItem('baobab_token') ||
+    localStorage.getItem('rajon_token') ||
     localStorage.getItem('token') ||
     localStorage.getItem('access_token') ||
     sessionStorage.getItem('token') ||

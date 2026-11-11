@@ -345,7 +345,7 @@ export const HostExecutionMonitorPage: React.FC = () => {
     });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'baobab_host_execution_logs.csv';
+    a.download = 'rajon_host_execution_logs.csv';
     a.click();
   };
 

@@ -1,3 +1,4 @@
+import { CardProfilesUnderBinTab } from './CardProfilesUnderBinTab';
 import React, { useEffect, useState } from 'react';
 import {
   Landmark,
@@ -20,7 +21,7 @@ import {
 import { apiFetch } from '../api';
 
 export const InstitutionsAndBinsPage: React.FC = () => {
-  const [tab, setTab] = useState<'INST' | 'PS' | 'BINS' | 'PAN_ROUTER' | 'NET'>('INST');
+  const [tab, setTab] = useState<'INST' | 'PS' | 'BINS' | 'CARD_PROFILES' | 'PAN_ROUTER' | 'NET'>('INST');
   const [institutions, setInstitutions] = useState<any[]>([]);
   const [processingSystems, setProcessingSystems] = useState<any[]>([]);
   const [bins, setBins] = useState<any[]>([]);
@@ -609,7 +610,7 @@ export const InstitutionsAndBinsPage: React.FC = () => {
                 onChange={(e) => setPsForm({ ...psForm, message_format: e.target.value })}
                 className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-2 text-xs font-mono"
               >
-                <option value="TIC_V2164E">Compass Plus TIC v2.164e</option>
+                <option value="TIC_V2164E">Rajon TIC v2.164e</option>
                 <option value="ISO8583_1987">Standard ISO 8583:1987</option>
               </select>
             </div>
@@ -827,6 +828,8 @@ export const InstitutionsAndBinsPage: React.FC = () => {
       {/* ========================================================================= */}
       {/* TAB 4: PAN ROUTER RULES (WITH PRIORITY & CONFLICT CHECKS)                 */}
       {/* ========================================================================= */}
+      {tab === 'CARD_PROFILES' && <CardProfilesUnderBinTab />}
+
       {tab === 'PAN_ROUTER' && (
         <div className="space-y-6">
           {/* Live Router Test Bench */}
@@ -1142,7 +1145,7 @@ export const InstitutionsAndBinsPage: React.FC = () => {
                   onChange={(e) => setEditPsModal({ ...editPsModal, message_format: e.target.value })}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5"
                 >
-                  <option value="TIC_V2164E">Compass Plus TIC v2.164e</option>
+                  <option value="TIC_V2164E">Rajon TIC v2.164e</option>
                   <option value="ISO8583_1987">Standard ISO 8583:1987</option>
                 </select>
               </div>
@@ -1274,6 +1277,7 @@ export const InstitutionsAndBinsPage: React.FC = () => {
           </form>
         </div>
       )}
-    </div>
+</div>
+
   );
 };

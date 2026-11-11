@@ -1,6 +1,6 @@
 # E:\HOST_VSCODE\host-simulator\fix_production_host.py
 """
-Production Fix for BAOBAB Host Simulator (Render + Netlify Deployment)
+Production Fix for RAJON Host Simulator (Render + Netlify Deployment)
 Fixes:
   1. ValueError: Provider Isolation Violation: Key 'AWK_ATM_01' belongs to INTERNAL_HSM
      by auto-seeding deterministic EXTERNAL_HSM LMK tokens on startup and on-demand.

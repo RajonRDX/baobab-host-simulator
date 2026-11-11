@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 install_simulator_upgrade.py
-BAOBAB Private Host Simulator - Transaction Simulator workbench upgrade
+RAJON Private Host Simulator - Transaction Simulator workbench upgrade
 
 HOW TO RUN
     1. Save this file in your project root (the folder that contains `backend` and `frontend`),
@@ -433,7 +433,7 @@ interface LoadOpts {
   time: boolean;
 }
 
-const STORAGE_KEY = 'BAOBAB_SIMULATOR_STATE_V2';
+const STORAGE_KEY = 'RAJON_SIMULATOR_STATE_V2';
 const MANDATORY_FIELDS = ['2', '3', '4', '11', '37', '41', '49'];
 const SAMPLE_ISO =
   '02007220000008008000164567890123450001010000000000100000100001000020526001050';
@@ -2353,7 +2353,7 @@ def step_docs(s):
                     "- **Table**: `simulator_saved_cases` (id, name unique, description, mti, transaction_code, clear_pin_helper, fields JSON, enabled_fields JSON, created_at, updated_at)",
                     "- **GET /api/simulator-workbench/next-ids**: last STAN/RRN in `transactions` and the next free values",
                     "- **GET/POST /api/simulator-workbench/cases**, **GET/PUT/DELETE /api/simulator-workbench/cases/{id}**: saved simulator cases (POST returns 409 for a duplicate name unless `overwrite` is true)",
-                    "- **Browser storage**: key `BAOBAB_SIMULATOR_STATE_V2` (localStorage) holds the last simulator session",
+                    "- **Browser storage**: key `RAJON_SIMULATOR_STATE_V2` (localStorage) holds the last simulator session",
                     "",
                 ]
             ),

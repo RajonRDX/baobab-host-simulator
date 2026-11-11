@@ -1,5 +1,5 @@
 """
-Restore the BAOBAB Host Simulator files changed by:
+Restore the RAJON Host Simulator files changed by:
   - fix_host_render_url.py
   - fix_production_host.py
 
@@ -96,7 +96,7 @@ def build_restore_plan():
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Preview or restore BAOBAB Host Simulator patch backups."
+        description="Preview or restore RAJON Host Simulator patch backups."
     )
     parser.add_argument(
         "--apply",
@@ -106,7 +106,7 @@ def main():
     args = parser.parse_args()
 
     print("=" * 78)
-    print(" BAOBAB HOST SIMULATOR - PATCH ROLLBACK")
+    print(" RAJON HOST SIMULATOR - PATCH ROLLBACK")
     print("=" * 78)
     print(f"Target folder : {HOST_ROOT}")
     print(f"Backup folder : {BACKUP_ROOT}")

@@ -1,6 +1,6 @@
 """
 MODULE 5 — host_engine.py
-Central HostTransactionProcessor and configurable BAOBAB-inspired Authorization Engine.
+Central HostTransactionProcessor and configurable Rajon Authorization Engine.
 All transaction entry methods (Transaction Simulator, pasted raw TIC messages, sample scenarios,
 and future NetworkAdapter requests) pass through this single service.
 """
@@ -16,6 +16,8 @@ from app.iso_tic import RESPONSE_MTI_MAP, build_tic_message, decode_tic_message,
 from app.logging_service import record_system_log
 # [PATCH step08:host_engine_evaluator_import]
 from app.rules_evaluator import SafeAstEvaluator, build_rule_context
+# [PATCH step13_03:limit_engine_integration]
+from app.limit_engine import LimitCalculationEngine
 # [PATCH step11:host_engine_network_import_adapter]
 from app.network_adapter import SimulatedNetworkAdapter, resolve_transaction_routing
 from app.models import (
@@ -66,12 +68,16 @@ class NetworkAdapter:
 class HostTransactionProcessor:
     """
     Executes the 32-step transaction-processing pipeline with atomic database ledger posting,
-    configurable BAOBAB-inspired rule ordering, HSM cryptographic verification, and full trace logging.
+    configurable Rajon rule ordering, HSM cryptographic verification, and full trace logging.
     """
 
     def __init__(self, db: Session):
         self.db = db
         self.hsm = HSMAdapter(db)
+        self.limit_engine = LimitCalculationEngine(db)
+        self.limit_eval_results: List[Dict[str, Any]] = []
+        self.pending_limit_consumptions: List[Any] = []
+        self.resolved_auth_profile_code: Optional[str] = None
         self.checks_log: List[Dict[str, Any]] = []
         self.check_counter: int = 0
 # [PATCH tx_log_viewer_v1:host_engine_start_timer]
@@ -124,14 +130,18 @@ class HostTransactionProcessor:
         param = (
             self.db.query(HostParameter)
             .filter(
-                HostParameter.parameter_group == "BAOBAB_AUTH_RULES",
+                HostParameter.parameter_group == "RAJON_AUTH_RULES",
                 HostParameter.parameter_name == param_name,
-                HostParameter.active == True,  # noqa: E712
             )
             .first()
         )
         if not param:
             return default
+        # [PATCH rules_checks:is_rule_enabled]
+        # an inactive parameter means the check was switched OFF (the old page used to set active = false,
+        # but the engine only looked at active rows, so the check silently stayed ON)
+        if not param.active:
+            return False
         val = param.parameter_value
         if isinstance(val, dict):
             return bool(val.get("enabled", default))
@@ -526,7 +536,129 @@ class HostTransactionProcessor:
                 )
             self._add_check("Transaction Permissions", "PASSED", "00", f"Permitted by profile {prof.profile_code}")
 
+# [PATCH local_host:policy_stage]
+        # Step 15.1: Rajon Local Host policy (host status, source system, channel, transaction matrix, risk filters)
+        self._lh_engine = None
+        self._lh_ctx = None
+        _lh_policy = None
+        try:
+            from app.local_host_engine import LocalHostEngine, build_context as _lh_build_context
+            self._lh_engine = LocalHostEngine(self.db)
+            self._lh_ctx = _lh_build_context(
+                self.db, mti=mti, fields=input_fields, request_data=request_data, tx_code_cfg=tx_code_cfg,
+                tx_amount=tx_amount, card=card, customer=customer, account=account, acq_inst=acq_inst,
+                ps_code=ps_code_val, tx_id=tx_id, tx_ref=tx_ref,
+            )
+            _lh_policy = self._lh_engine.evaluate_policy(self._lh_ctx)
+            for _c in _lh_policy.checks:
+                self._add_check(_c["name"], _c["status"], _c["rc"], _c["message"])
+        except Exception as _lh_err:  # a bug in the control center must never take the host down
+            _lh_policy = None
+            self._lh_engine = None
+            self._add_check("Local Host Policy", "SKIPPED", "00", f"Policy engine error ignored: {_lh_err}")
+        if _lh_policy is not None and not _lh_policy.allowed:
+            return self._finalize_transaction(
+                tx_id=tx_id,
+                tx_ref=tx_ref,
+                mti=mti,
+                fields=input_fields,
+                response_code=_lh_policy.response_code,
+                raw_request_msg=raw_req_msg,
+                tx_code=tx_code_cfg.transaction_code,
+                card=card,
+                customer=customer,
+                account=account,
+                source_channel=request_data.get("source_channel", "SIMULATOR"),
+                issuer_institution_id=card.institution_id if (card and card.institution_id) else issuer_inst_id,
+                acquirer_institution_id=acquirer_inst_id,
+                ps_code=ps_code_val,
+            )
+
 # [PATCH step08:host_engine_eval_rules_stage]
+        # [PATCH step13_03:auth_profile_and_limit_engine_stage]
+        # Step 15.2: Resolve BIN -> Card Profile -> Authorization Profile, Check Tx Permission & Evaluate Configurable Card/Account Limits
+        limit_eval_report = self.limit_engine.evaluate_transaction(
+            card=card,
+            account=account,
+            tx_code=tx_code_cfg.transaction_code,
+            tx_amount=tx_amount,
+            tx_code_cfg=tx_code_cfg,
+            billing_amount=tx_amount,
+            processing_code=proc_code,
+            tx_fields=input_fields,
+            transaction_id=tx_id,
+            transaction_reference=tx_ref,
+        )
+        self.limit_eval_results = limit_eval_report.evaluated_limits
+        if limit_eval_report.authorization_profile:
+            self.resolved_auth_profile_code = limit_eval_report.authorization_profile.auth_profile_code
+            self._add_check(
+                "Authorization Profile Resolution",
+                "PASSED",
+                "00",
+                f"Resolved Authorization Profile {limit_eval_report.authorization_profile.auth_profile_code} via Card Profile {limit_eval_report.card_profile.profile_code if limit_eval_report.card_profile else 'DEFAULT'}",
+            )
+
+        if not limit_eval_report.allowed:
+            if limit_eval_report.failed_stage == "AUTH_PROFILE_STATUS":
+                self._add_check(
+                    "Authorization Profile Check",
+                    "FAILED",
+                    limit_eval_report.response_code,
+                    limit_eval_report.decline_reason or "Authorization profile inactive",
+                )
+            elif limit_eval_report.failed_stage == "TX_PERMISSION":
+                self._add_check(
+                    "Profile Transaction Permission",
+                    "FAILED",
+                    limit_eval_report.response_code,
+                    limit_eval_report.decline_reason or "Transaction code disallowed by profile",
+                )
+            else:
+                # Record passed limits up to the failed limit
+                for ev in limit_eval_report.evaluated_limits:
+                    chk_label = f"{ev['scope'].title()} Limit {ev['limit_code']} ({ev['limit_name']})"
+                    if ev["final_result"] == "DECLINED":
+                        self._add_check(chk_label, "FAILED", ev["response_code"], ev["decline_reason"] or "Limit exceeded")
+                    else:
+                        self._add_check(
+                            chk_label,
+                            "PASSED",
+                            "00",
+                            f"Projected {ev['projected_usage']} vs Max {ev['maximum_value']} (Op {ev['comparison_operator']}) -> {ev['final_result']}",
+                        )
+            return self._finalize_transaction(
+                tx_id=tx_id,
+                tx_ref=tx_ref,
+                mti=mti,
+                fields=input_fields,
+                response_code=limit_eval_report.response_code,
+                raw_request_msg=raw_req_msg,
+                tx_code=tx_code_cfg.transaction_code,
+                card=card,
+                customer=customer,
+                account=account,
+                issuer_institution_id=card.institution_id if (card and card.institution_id) else issuer_inst_id,
+                acquirer_institution_id=acquirer_inst_id,
+                ps_code=ps_code_val,
+            )
+        else:
+            if limit_eval_report.authorization_profile:
+                self._add_check(
+                    "Profile Transaction Permission",
+                    "PASSED",
+                    "00",
+                    limit_eval_report.tx_permission_message,
+                )
+            for ev in limit_eval_report.evaluated_limits:
+                chk_label = f"{ev['scope'].title()} Limit {ev['limit_code']} ({ev['limit_name']})"
+                self._add_check(
+                    chk_label,
+                    "PASSED",
+                    "00",
+                    f"Prev={ev['previous_usage']}, Impact={ev['transaction_impact']}, Projected={ev['projected_usage']} (Op '{ev['comparison_operator']}' Max {ev['maximum_value']})",
+                )
+
         # Step 15.5: Dynamic Authorizer Rules Evaluation (Stage: PRE_AUTH)
         rule_ctx = build_rule_context(
             mti=mti,
@@ -572,6 +704,44 @@ class HostTransactionProcessor:
                     if rule.stop_on_match:
                         break
 
+
+# [PATCH local_host:algo_pre_auth]
+        # Step 15.6: Algo Control blocks (Python / SQL risk algos, stage PRE_AUTH)
+        _lh_algo = None
+        if getattr(self, "_lh_engine", None) is not None:
+            try:
+                from app.local_host_engine import build_context as _lh_build_context
+                _ap = limit_eval_report.authorization_profile if limit_eval_report else None
+                self._lh_ctx = _lh_build_context(
+                    self.db, mti=mti, fields=input_fields, request_data=request_data, tx_code_cfg=tx_code_cfg,
+                    tx_amount=tx_amount, card=card, customer=customer, account=account, acq_inst=acq_inst,
+                    ps_code=ps_code_val, tx_id=tx_id, tx_ref=tx_ref,
+                    auth_profile_code=getattr(_ap, "auth_profile_code", None),
+                    auth_profile_name=getattr(_ap, "profile_name", None),
+                )
+                _lh_algo = self._lh_engine.run_algos("PRE_AUTH", self._lh_ctx)
+                for _c in _lh_algo.checks:
+                    self._add_check(_c["name"], _c["status"], _c["rc"], _c["message"])
+            except Exception as _lh_err:
+                _lh_algo = None
+                self._add_check("Risk Algos (PRE_AUTH)", "SKIPPED", "00", f"Algo engine error ignored: {_lh_err}")
+        if _lh_algo is not None and _lh_algo.decline:
+            return self._finalize_transaction(
+                tx_id=tx_id,
+                tx_ref=tx_ref,
+                mti=mti,
+                fields=input_fields,
+                response_code=_lh_algo.decline["rc"],
+                raw_request_msg=raw_req_msg,
+                tx_code=tx_code_cfg.transaction_code,
+                card=card,
+                customer=customer,
+                account=account,
+                source_channel=request_data.get("source_channel", "SIMULATOR"),
+                issuer_institution_id=card.institution_id if (card and card.institution_id) else issuer_inst_id,
+                acquirer_institution_id=acquirer_inst_id,
+                ps_code=ps_code_val,
+            )
 
         # Step 16-18: HSM Cryptographic Checks (PIN / PVV / CVV / EMV / MAC)
         pin_prof = self.db.query(PinProfile).filter(PinProfile.card_id == card.id).first()
@@ -730,7 +900,7 @@ class HostTransactionProcessor:
                 )
             self._add_check("HSM MAC Verification", "PASSED", "00", "MAC verified by HSM", mac_res["duration_ms"])
 
-        # Step 19-20: Check Card Limits & Account Limits (BAOBAB CHECKCARDLIMITS & CHECKACCT2CARDLIMITS)
+        # Step 19-20: Check Card Limits & Account Limits (RAJON CHECKCARDLIMITS & CHECKACCT2CARDLIMITS)
         card_limit = self.db.query(CardLimit).filter(CardLimit.card_id == card.id, CardLimit.status == "ACTIVE").first()
         acct_limit = self.db.query(AccountLimit).filter(AccountLimit.account_id == account.id, AccountLimit.status == "ACTIVE").first()
 
@@ -837,8 +1007,40 @@ class HostTransactionProcessor:
                 f"Sufficient balance ({account.available_balance} {account.currency})",
             )
 
+# [PATCH local_host:algo_post_auth]
+        # Step 22.5: Algo Control blocks (stage POST_AUTH: balance and limits already passed)
+        _lh_post = None
+        if getattr(self, "_lh_engine", None) is not None:
+            try:
+                _lh_post = self._lh_engine.run_algos("POST_AUTH", self._lh_ctx)
+                for _c in _lh_post.checks:
+                    self._add_check(_c["name"], _c["status"], _c["rc"], _c["message"])
+            except Exception as _lh_err:
+                _lh_post = None
+                self._add_check("Risk Algos (POST_AUTH)", "SKIPPED", "00", f"Algo engine error ignored: {_lh_err}")
+        if _lh_post is not None and _lh_post.decline:
+            return self._finalize_transaction(
+                tx_id=tx_id,
+                tx_ref=tx_ref,
+                mti=mti,
+                fields=input_fields,
+                response_code=_lh_post.decline["rc"],
+                raw_request_msg=raw_req_msg,
+                tx_code=tx_code_cfg.transaction_code,
+                card=card,
+                customer=customer,
+                account=account,
+                source_channel=request_data.get("source_channel", "SIMULATOR"),
+                issuer_institution_id=card.institution_id if (card and card.institution_id) else issuer_inst_id,
+                acquirer_institution_id=acquirer_inst_id,
+                ps_code=ps_code_val,
+            )
+
         # Step 23-25: Approve, Post Atomic Ledger Entry, and Update Limit Counters
         self._add_check("Authorization Decision", "PASSED", "00", "Transaction APPROVED by Host Engine")
+        # Queue pending LimitCalculationEngine usage to be flushed right after Transaction row is inserted
+        if limit_eval_report and limit_eval_report.pending_consumptions:
+            self.pending_limit_consumptions = list(limit_eval_report.pending_consumptions)
 
         if tx_code_cfg.financial_flag and tx_amount > Decimal("0.00"):
             bal_before = account.available_balance
@@ -964,6 +1166,13 @@ class HostTransactionProcessor:
             }
 
         orig_tx.transaction_status = "REVERSED"
+        self.limit_engine.reverse_transaction_usage(
+            original_transaction_id=orig_tx.id,
+            reversal_transaction_id=tx_id,
+            card_id=orig_tx.card_id,
+            account_id=orig_tx.account_id,
+            original_amount=orig_tx.transaction_amount,
+        )
         self._add_check(
             "Reversal Processing",
             "PASSED",
@@ -1081,6 +1290,11 @@ class HostTransactionProcessor:
 
         self.db.add(tx)
         self.db.flush()
+
+        # [PATCH step13_07:commit_limit_usage_after_tx_flush]
+        if approved and getattr(self, 'pending_limit_consumptions', None):
+            self.limit_engine.commit_approved_usage(tx.id, self.pending_limit_consumptions)
+            self.pending_limit_consumptions = []
 
         # Persist structured TransactionTraceEvent records for actual executed stages
         trace_order = 1
@@ -1205,7 +1419,7 @@ class HostTransactionProcessor:
                     notification_type="SMS_SIMULATED",
                     recipient_masked=f"***{customer.mobile_number[-4:]}",
                     message_template=(
-                        f"[BAOBAB HOST] Card {tx.masked_pan} TX {tx_amount} {tx.currency} "
+                        f"[RAJON HOST] Card {tx.masked_pan} TX {tx_amount} {tx.currency} "
                         f"Status: {tx.authorization_status} (RC {response_code}). Avl Bal: "
                         f"{account.available_balance if account else 'N/A'}"
                     ),
@@ -1258,4 +1472,6 @@ class HostTransactionProcessor:
             "sanitized_response_tic": mask_raw_tic_message(raw_resp_msg),
             "compact_response_tic": mask_raw_tic_message(compact_resp),
             "checks": self.checks_log,
+            "authorization_profile_code": self.resolved_auth_profile_code,
+            "limit_evaluations": self.limit_eval_results,
         }

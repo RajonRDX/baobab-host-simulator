@@ -14,5 +14,5 @@ BACKEND_DIR = ROOT_DIR / "backend"
 
 if __name__ == "__main__":
     os.chdir(BACKEND_DIR)
-    print("Starting BAOBAB Private Host Simulator Backend on http://127.0.0.1:8000 ...")
+    print("Starting RAJON Private Host Simulator Backend on http://127.0.0.1:8000 ...")
     subprocess.run([sys.executable, "-m", "uvicorn", "app.main:app", "--reload", "--port", "8000"])

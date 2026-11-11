@@ -38,7 +38,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
-    description="BAOBAB-Inspired Private Banking Host Simulator with Compass Plus TW TIC/TCI v2.164e and Thales 10K Soft-HSM Integration",
+    description="Rajon Private Banking Host Simulator with Rajon TIC/TCI v2.164e and Thales 10K Soft-HSM Integration",
     lifespan=lifespan,
 )
 
@@ -56,35 +56,21 @@ app.add_middleware(
 
 app.include_router(router)
 app.include_router(institutions_router)
+# [PATCH step13_03:limits_and_profiles_router]
+from app.routers.limits_and_profiles_router import router as limits_and_profiles_router
+app.include_router(limits_and_profiles_router)
 app.include_router(lmk_key_management_router)
 # [PATCH tx_log_viewer_v2:main_include_router]
 app.include_router(transaction_logs_router)
 # [PATCH simulator_workbench_v2:main_router]
 from app.simulator_workbench_router import router as simulator_workbench_router
 app.include_router(simulator_workbench_router)
-
-
-
-
-from typing import Any, Dict
-from fastapi import Body, Depends
-from sqlalchemy.orm import Session
-from app.database import get_db
-from app.config import settings
-from app.lmk_key_management_service import LMKKeyManagementService
-from app.routers.lmk_key_management_router import _execute_safe_provider_switch
-
-@app.post("/api/hsm/lmk/provider")
-@app.put("/api/hsm/lmk/provider")
-@app.post("/api/hsm/lmk/provider/switch")
-@app.post("/api/hsm/provider/switch")
-@app.post("/api/hsm/provider")
-@app.put("/api/hsm/provider")
-@app.post("/api/hsm/mode")
-@app.put("/api/hsm/mode")
-@app.post("/api/lmk/provider/switch")
-def universal_hsm_provider_switch(payload: Dict[str, Any] = Body(default={}), db: Session = Depends(get_db)):
-    return _execute_safe_provider_switch(payload, db)
+# [PATCH local_host:router]
+from app.local_host_router import router as local_host_router
+app.include_router(local_host_router)
+# [PATCH customer_360:router]
+from app.customer_360 import router as customer_360_router
+app.include_router(customer_360_router)
 
 
 @app.get("/health")

@@ -185,7 +185,7 @@ def _execute_safe_provider_switch(payload: Dict[str, Any], db: Session) -> Dict[
     import logging as _logging
     import urllib.request as _urlreq
 
-    log = _logging.getLogger("baobab.host")
+    log = _logging.getLogger("rajon.host")
     raw_target = (
         payload.get("provider_mode")
         or payload.get("provider_type")
@@ -230,7 +230,7 @@ def _execute_safe_provider_switch(payload: Dict[str, Any], db: Session) -> Dict[
         try:
             req = _urlreq.Request(
                 svc.bridge.status_url,
-                headers={"Accept": "application/json", "User-Agent": "BAOBAB-Host-Simulator/1.0"},
+                headers={"Accept": "application/json", "User-Agent": "RAJON-Host-Simulator/1.0"},
                 method="GET",
             )
             with _urlreq.urlopen(req, timeout=8) as resp:

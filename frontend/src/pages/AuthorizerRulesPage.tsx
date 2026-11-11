@@ -36,7 +36,7 @@ export const AuthorizerRulesPage: React.FC = () => {
         apiFetch('/host-parameters'),
       ]);
       setRules(rList);
-      setParams(pList.filter((p: any) => p.parameter_group === 'BAOBAB_AUTH_RULES'));
+      setParams(pList.filter((p: any) => p.parameter_group === 'RAJON_AUTH_RULES'));
       if (rList.length > 0 && !selectedRule) setSelectedRule(rList[0]);
     } catch (e) {
       console.error(e);
@@ -127,7 +127,7 @@ export const AuthorizerRulesPage: React.FC = () => {
       <div className="flex flex-wrap gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
         {[
           ['CUSTOM', '1. Custom Expression Rules & Test Bench', Code2],
-          ['BUILTIN', '2. Built-in BAOBAB Checks', ShieldCheck],
+          ['BUILTIN', '2. Built-in RAJON Checks', ShieldCheck],
           ['BUILDER', '3. Visual Condition Builder', Sliders],
         ].map(([k, label, Icon]: any) => (
           <button
@@ -294,7 +294,7 @@ export const AuthorizerRulesPage: React.FC = () => {
       {/* TAB 2: BUILTIN CHECKS */}
       {tab === 'BUILTIN' && (
         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
-          <h2 className="text-sm font-bold">Core BAOBAB Host Authorization Checks</h2>
+          <h2 className="text-sm font-bold">Core RAJON Host Authorization Checks</h2>
           <div className="space-y-2 text-xs font-mono">
             {params.map((p) => {
               const enabled = p.parameter_value?.enabled ?? p.active;

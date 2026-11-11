@@ -669,7 +669,7 @@ def export_transaction_logs_csv(
         ])
 
     csv_bytes = output.getvalue().encode("utf-8-sig")
-    fname = f"baobab_transaction_logs_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    fname = f"rajon_transaction_logs_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
     return Response(
         content=csv_bytes,
         media_type="text/csv",
@@ -743,7 +743,7 @@ def get_transaction_general_detail(
             "transaction_status": row_summary["status"],
             "authorization_status": tx.authorization_status,
             "transaction_channel": tx.source_channel,
-            "source_application": "BAOBAB Host Switch Engine",
+            "source_application": "RAJON Host Switch Engine",
             "correlation_id": tx.correlation_id or tx.transaction_reference,
             "is_on_us": tx.is_on_us,
         },
@@ -1727,7 +1727,7 @@ def main():
     args = parser.parse_args()
 
     root = detect_project_root(args.project_root)
-    print(f"=== BAOBAB Transaction Log Viewer Installer v2 ===\nProject Root: {root}\nDry Run: {args.dry_run}")
+    print(f"=== RAJON Transaction Log Viewer Installer v2 ===\nProject Root: {root}\nDry Run: {args.dry_run}")
     installer = SafeInstaller(root, dry_run=args.dry_run)
     apply_v2(installer)
 

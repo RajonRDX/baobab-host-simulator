@@ -194,7 +194,7 @@ export const TransactionCodesPage: React.FC = () => {
 };
 
 // ============================================================================
-// PAGE 14: HOST CONFIGURATION (BAOBAB Parameters)
+// PAGE 14: HOST CONFIGURATION (RAJON Parameters)
 // ============================================================================
 export const HostConfigurationPage: React.FC = () => {
   const [params, setParams] = useState<any[]>([]);
@@ -217,7 +217,7 @@ export const HostConfigurationPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold">BAOBAB-Inspired Host Authorization Configuration</h1>
+        <h1 className="text-xl font-bold">Rajon Host Authorization Configuration</h1>
         <p className="text-xs text-slate-500">
           Enable or disable central authorization engine rules (`AUTHORIZEACCTBALANCESTRANS`, `CHECKCARDLIMITS`, `CHECKACCT2CARDLIMITS`)
         </p>

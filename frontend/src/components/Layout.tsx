@@ -1,80 +1,90 @@
-import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Users,
-  UserCheck,
-  CreditCard,
-  Landmark,
-  Sliders,
-  ShieldAlert,
-  FileCode2,
-  TerminalSquare,
-  BookOpen,
-  KeyRound,
-  Cpu,
-  Activity,
-  Settings,
-  CheckCircle2,
-  ScrollText,
-  Bell,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   LogOut,
   Moon,
   Sun,
-  Network,
   Layers,
+  Columns,
+  Maximize2,
+  Search,
+  X,
+  ExternalLink,
+  PanelLeftClose,
+  FolderTree,
+  TerminalSquare,
+  CreditCard,
+  Cpu,
 } from 'lucide-react';
-import { clearAuthSession } from '../api';
+import { clearAuthSession, ensureSilentAuthSession } from '../api';
+import {
+  PAYMENT_ARCHITECTURE_TREE,
+  ALL_NAV_ITEMS,
+  resolveNavMeta,
+  NavDomainBranch,
+  NavSubItem,
+} from '../workspace/navRegistry';
+import { useWorkspace } from '../workspace/WorkspaceContext';
+import { FloatingWindowManager } from '../workspace/FloatingWindowManager';
+import { IsolatedRouteViewport } from '../workspace/RouteRenderer';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
-const NAV_ITEMS = [
-  { to: '/', label: '1. Dashboard', icon: LayoutDashboard, group: 'OVERVIEW' },
-  { to: '/customers', label: '2. Customers', icon: Users, group: 'CORE BANKING' },
-  { to: '/customer-maintenance', label: '2.5. Customer Maintenance 360', icon: UserCheck, group: 'CORE BANKING' },
-  { to: '/cards', label: '3. Cards & Profiles', icon: CreditCard, group: 'CORE BANKING' },
-  { to: '/accounts', label: '4. Accounts & Ledger', icon: Landmark, group: 'CORE BANKING' },
-// [PATCH step01_03:layout_nav_institutions]
-  { to: '/institutions', label: '1.5. Banks & Switch BINS', icon: Network, group: 'CORE BANKING' },
-// [PATCH step12:layout_nav_settlement]
-  { to: '/settlement', label: '1.8. Clearing & Settlement', icon: Landmark, group: 'CORE BANKING' },
-  { to: '/card-limits', label: '5. Card Limits', icon: Sliders, group: 'LIMIT ENGINE' },
-  { to: '/account-limits', label: '6. Account Limits', icon: ShieldAlert, group: 'LIMIT ENGINE' },
-  { to: '/transaction-codes', label: '7. Transaction Codes', icon: FileCode2, group: 'SWITCH & SIMULATOR' },
-// [PATCH step08:layout_nav_authorizer_rules]
-  { to: '/authorizer-rules', label: '7.5. Authorizer Rules', icon: Sliders, group: 'SWITCH & SIMULATOR' },
-// [PATCH step11:layout_nav_network_routing]
-  { to: '/network-routing', label: '7.8. Network Routing & Sim', icon: Network, group: 'SWITCH & SIMULATOR' },
-  { to: '/simulator', label: '8. Transaction Simulator', icon: TerminalSquare, group: 'SWITCH & SIMULATOR' },
-  { to: '/transactions', label: '9. Transaction Journal', icon: BookOpen, group: 'SWITCH & SIMULATOR' },
-  { to: '/hsm-keys', label: '11. Host Key Management', icon: KeyRound, group: 'CRYPTO & HSM' },
-  { to: '/hsm-workbench', label: '12. HSM Workbench', icon: Cpu, group: 'CRYPTO & HSM' },
-// [PATCH step06:layout_nav_card_lab]
-  { to: '/card-lab', label: '12.5. PIN & Card Lab', icon: CreditCard, group: 'CRYPTO & HSM' },
-// [PATCH step10:layout_nav_key_ceremony]
-  { to: '/key-ceremony', label: '12.8. Key Ceremony Lab', icon: Layers, group: 'CRYPTO & HSM' },
-  { to: '/monitor', label: '13. Execution Monitor', icon: Activity, group: 'OBSERVABILITY' },
-// [PATCH step07:layout_nav_log_portal]
-  { to: '/log-portal', label: '13.5. Operational & Crypto Portal', icon: Activity, group: 'OBSERVABILITY' },
-  { to: '/transaction-logs', label: 'Transaction Log Viewer', icon: Activity, group: 'OBSERVABILITY' },
-  { to: '/host-config', label: '14. Host Configuration', icon: Settings, group: 'OBSERVABILITY' },
-  { to: '/response-codes', label: '15. Response Codes', icon: CheckCircle2, group: 'OBSERVABILITY' },
-  { to: '/system-logs', label: '16. System Logs', icon: ScrollText, group: 'OBSERVABILITY' },
-// [PATCH step03_03:layout_nav_audit_trail]
-  { to: '/audit-trail', label: '16.5. Audit Trail Diff', icon: CheckCircle2, group: 'OBSERVABILITY' },
-  { to: '/notifications', label: '17. Notifications Sim', icon: Bell, group: 'OBSERVABILITY' },
-];
-
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const {
+    windows,
+    splitPath,
+    splitWidthPercent,
+    subTreeMode,
+    clickBehavior,
+    commandPaletteOpen,
+    setSubTreeMode,
+    setClickBehavior,
+    setCommandPaletteOpen,
+    setSplitWidthPercent,
+    openPopoutWindow,
+    openSideBySideSplit,
+    closeSideBySideSplit,
+  } = useWorkspace();
+
   const [collapsed, setCollapsed] = useState(false);
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
-  const navigate = useNavigate();
-  const hsmMode = sessionStorage.getItem('BAOBAB_HSM_MODE') || 'SOFT_HSM_LOCAL';
-  const username = sessionStorage.getItem('BAOBAB_USER') || 'admin';
+
+  const activeMeta = useMemo(() => resolveNavMeta(location.pathname), [location.pathname]);
+
+  const [selectedBranchId, setSelectedBranchId] = useState<string | null>(null);
+  const [expandedBranches, setExpandedBranches] = useState<Record<string, boolean>>(() => ({
+    [activeMeta.branchId]: true,
+    'card-management': true,
+    'simulator-journals': true,
+  }));
+
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    ensureSilentAuthSession();
+  }, []);
+
+  useEffect(() => {
+    setExpandedBranches((prev) => ({ ...prev, [activeMeta.branchId]: true }));
+  }, [activeMeta.branchId]);
+
+  const hsmMode =
+    localStorage.getItem('RAJON_HSM_MODE') ||
+    sessionStorage.getItem('RAJON_HSM_MODE') ||
+    'SOFT_HSM_REMOTE';
+  const username =
+    localStorage.getItem('RAJON_USER') ||
+    sessionStorage.getItem('RAJON_USER') ||
+    'admin';
 
   const toggleDark = () => {
     const next = !dark;
@@ -87,98 +97,734 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     navigate('/login');
   };
 
+  const handleBranchClick = (branch: NavDomainBranch) => {
+    if (subTreeMode === 'SIDE_FLYOUT') {
+      setSelectedBranchId((prev) => (prev === branch.id ? null : branch.id));
+    } else {
+      setExpandedBranches((prev) => ({
+        ...prev,
+        [branch.id]: !prev[branch.id],
+      }));
+    }
+  };
+
+  const handleSubItemClick = (item: NavSubItem, forceMainCanvas = false) => {
+    if (subTreeMode === 'SIDE_FLYOUT') {
+      setSelectedBranchId(null);
+    }
+    if (forceMainCanvas || clickBehavior === 'MAIN_CANVAS' || item.to === location.pathname) {
+      navigate(item.to);
+    } else {
+      openPopoutWindow(item.to, 'LG');
+    }
+  };
+
+  const activeFlyoutBranch = useMemo(
+    () => PAYMENT_ARCHITECTURE_TREE.find((b) => b.id === selectedBranchId) || null,
+    [selectedBranchId]
+  );
+
+  const filteredSearchItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return ALL_NAV_ITEMS;
+    return ALL_NAV_ITEMS.filter(
+      (item) =>
+        item.label.toLowerCase().includes(q) ||
+        item.shortLabel.toLowerCase().includes(q) ||
+        item.code.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.branchTitle.toLowerCase().includes(q)
+    );
+  }, [searchQuery]);
+
+  const splitMeta = useMemo(
+    () => (splitPath ? resolveNavMeta(splitPath) : null),
+    [splitPath]
+  );
+
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950">
-      {/* Dark Navy Sidebar */}
+    <div className="flex h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      {/* LEFT DOMAIN TREE SIDEBAR */}
       <aside
         className={`${
-          collapsed ? 'w-16' : 'w-64'
-        } bg-slate-900 text-slate-200 flex flex-col border-r border-slate-800 transition-all duration-200 select-none`}
+          collapsed ? 'w-16' : 'w-72'
+        } bg-slate-950 text-slate-200 flex flex-col border-r border-slate-800/90 transition-all duration-200 select-none z-30 shrink-0`}
       >
-        <div className="h-16 flex items-center justify-between px-4 border-b border-slate-800">
+        <div className="h-14 flex items-center justify-between px-3.5 border-b border-slate-800/90 bg-slate-900/60">
           {!collapsed && (
-            <div className="flex items-center gap-2.5">
-              <div className="h-3 w-3 rounded-full bg-emerald-400 animate-pulse" />
-              <div>
-                <div className="font-mono font-bold text-sm tracking-wider text-white">BAOBAB HOST</div>
-                <div className="text-[10px] font-mono text-emerald-400">SWITCH SIMULATOR v1.0</div>
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="h-3 w-3 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_12px_#10b981]" />
+              <div className="truncate">
+                <div className="font-mono font-bold text-xs tracking-wider text-white">
+                  RAJON PAYMENT SWITCH
+                </div>
+                <div className="text-[10px] font-mono text-emerald-400 truncate">
+                  ARCHITECT WORKBENCH v2.0
+                </div>
               </div>
             </div>
           )}
           <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
-            title="Toggle Sidebar"
+            type="button"
+            onClick={() => {
+              setCollapsed(!collapsed);
+              setSelectedBranchId(null);
+            }}
+            className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition"
+            title={collapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
           >
-            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
-                    isActive
-                      ? 'bg-emerald-600 text-white shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                  }`
-                }
-                title={collapsed ? item.label : undefined}
+        {!collapsed && (
+          <div className="p-2.5 border-b border-slate-800/80 bg-slate-900/30 space-y-2">
+            <div className="flex items-center justify-between gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSubTreeMode('SIDE_FLYOUT')}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded-lg text-[10px] font-mono font-bold transition ${
+                  subTreeMode === 'SIDE_FLYOUT'
+                    ? 'bg-emerald-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Open sub-tree side-by-side when clicking a main branch"
               >
-                <Icon size={16} className="shrink-0" />
-                {!collapsed && <span className="truncate">{item.label}</span>}
-              </NavLink>
+                <Columns size={12} />
+                <span>Side Sub-Tree</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubTreeMode('ACCORDION');
+                  setSelectedBranchId(null);
+                }}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-2 rounded-lg text-[10px] font-mono font-bold transition ${
+                  subTreeMode === 'ACCORDION'
+                    ? 'bg-emerald-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Expand sub-tree inline inside the sidebar"
+              >
+                <FolderTree size={12} />
+                <span>Inline Tree</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCommandPaletteOpen(true)}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800/90 border border-slate-800 text-xs text-slate-400 hover:text-slate-200 transition"
+            >
+              <span className="flex items-center gap-2 font-mono text-[11px]">
+                <Search size={13} className="text-emerald-400" />
+                <span>Jump / Pop-out module...</span>
+              </span>
+              <kbd className="px-1.5 py-0.5 text-[9px] font-mono bg-slate-950 text-slate-400 rounded border border-slate-800">
+                Ctrl+K
+              </kbd>
+            </button>
+          </div>
+        )}
+
+        <nav className="flex-1 overflow-y-auto py-2.5 px-2 space-y-1.5">
+          {PAYMENT_ARCHITECTURE_TREE.map((branch) => {
+            const BranchIcon = branch.icon;
+            const hasActiveRoute = branch.items.some((i) => i.to === location.pathname);
+            const isFlyoutSelected =
+              subTreeMode === 'SIDE_FLYOUT' && selectedBranchId === branch.id;
+            const isAccordionExpanded =
+              subTreeMode === 'ACCORDION' && !!expandedBranches[branch.id];
+
+            return (
+              <div key={branch.id} className="space-y-1">
+                <button
+                  type="button"
+                  onClick={() => handleBranchClick(branch)}
+                  title={collapsed ? `${branch.title} (${branch.subtitle})` : undefined}
+                  className={`w-full flex items-center justify-between px-2.5 py-2.5 rounded-xl text-left transition-all border ${
+                    isFlyoutSelected
+                      ? `bg-gradient-to-r ${branch.accent} shadow-md`
+                      : hasActiveRoute
+                      ? 'bg-slate-900/95 border-emerald-500/40 text-white'
+                      : 'bg-slate-900/40 hover:bg-slate-900 border-slate-800/60 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div
+                      className={`p-1.5 rounded-lg border shrink-0 ${
+                        hasActiveRoute || isFlyoutSelected
+                          ? branch.badgeColor
+                          : 'bg-slate-900 border-slate-800 text-slate-400'
+                      }`}
+                    >
+                      <BranchIcon size={16} />
+                    </div>
+                    {!collapsed && (
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-bold tracking-tight truncate">
+                            {branch.title}
+                          </span>
+                          {hasActiveRoute && (
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shrink-0" />
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-400 truncate">
+                          {branch.subtitle}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {!collapsed && (
+                    <div className="flex items-center gap-1 shrink-0 ml-1">
+                      <span className="px-1.5 py-0.5 rounded-md bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-slate-400">
+                        {branch.items.length}
+                      </span>
+                      {subTreeMode === 'SIDE_FLYOUT' ? (
+                        <ChevronRight
+                          size={14}
+                          className={`transition-transform ${
+                            isFlyoutSelected ? 'translate-x-0.5 text-emerald-400' : 'text-slate-500'
+                          }`}
+                        />
+                      ) : (
+                        <ChevronDown
+                          size={14}
+                          className={`transition-transform ${
+                            isAccordionExpanded ? 'rotate-180 text-emerald-400' : 'text-slate-500'
+                          }`}
+                        />
+                      )}
+                    </div>
+                  )}
+                </button>
+
+                {!collapsed && subTreeMode === 'ACCORDION' && isAccordionExpanded && (
+                  <div className="ml-3.5 pl-2.5 border-l-2 border-slate-800 space-y-1 py-1">
+                    {branch.items.map((sub) => {
+                      const SubIcon = sub.icon;
+                      const isCurrentMain = location.pathname === sub.to;
+                      const isPoppedOut = windows.some((w) => w.path === sub.to);
+
+                      return (
+                        <div
+                          key={sub.to}
+                          className={`group flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs transition ${
+                            isCurrentMain
+                              ? 'bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 font-semibold'
+                              : 'text-slate-300 hover:bg-slate-900 hover:text-white border border-transparent'
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleSubItemClick(sub)}
+                            className="flex items-center gap-2 min-w-0 flex-1 text-left"
+                          >
+                            <SubIcon size={14} className={sub.accentColor} />
+                            <span className="font-mono text-[10px] text-slate-500 shrink-0">
+                              {sub.code}
+                            </span>
+                            <span className="truncate">{sub.shortLabel}</span>
+                            {isPoppedOut && (
+                              <span className="px-1 py-0.2 rounded bg-sky-500/20 text-sky-300 font-mono text-[9px]">
+                                WIN
+                              </span>
+                            )}
+                          </button>
+
+                          <div className="hidden group-hover:flex items-center gap-1 shrink-0 ml-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openPopoutWindow(sub.to, 'LG');
+                              }}
+                              title="Pop-out in Floating Window"
+                              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-emerald-400"
+                            >
+                              <ExternalLink size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openSideBySideSplit(sub.to);
+                              }}
+                              title="Open Side-by-Side (Split Screen)"
+                              className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-sky-400"
+                            >
+                              <Columns size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
 
-        <div className="p-3 border-t border-slate-800 space-y-2">
+        <div className="p-2.5 border-t border-slate-800/90 bg-slate-900/40 space-y-2">
           {!collapsed && (
-            <div className="px-2 py-1.5 rounded bg-slate-950/90 border border-slate-800 text-[11px] font-mono">
-              <div className="text-slate-400">HSM ADAPTER MODE:</div>
-              <div className="text-emerald-400 font-bold truncate">{hsmMode}</div>
+            <div className="px-2.5 py-2 rounded-xl bg-slate-950 border border-slate-800/90 text-[11px] font-mono flex items-center justify-between">
+              <div>
+                <div className="text-[10px] text-slate-400">EXTERNAL HSM LINK</div>
+                <div className="text-emerald-400 font-bold truncate">{hsmMode}</div>
+              </div>
+              <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[9px] font-bold">
+                ONLINE
+              </span>
             </div>
           )}
           <button
+            type="button"
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-rose-950/50 text-rose-300 hover:bg-rose-900/60 border border-rose-800/40"
+            className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 border border-rose-800/40 transition"
           >
-            <LogOut size={15} />
-            {!collapsed && <span>Sign Out ({username})</span>}
+            <LogOut size={14} />
+            {!collapsed && <span>Lock Console ({username})</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-3">
-            <span className="text-xs font-mono uppercase tracking-wider px-2.5 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
-              Compass Plus TW TIC v2.164e
-            </span>
-            <span className="text-xs font-mono px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 font-semibold">
-              Thales payShield 10K Soft-HSM Connected
-            </span>
+      {/* SIDE-BY-SIDE SUB-TREE FLYOUT DRAWER */}
+      {subTreeMode === 'SIDE_FLYOUT' && activeFlyoutBranch && (
+        <>
+          <div
+            className="fixed inset-0 z-20 bg-black/20 backdrop-blur-[1px]"
+            onClick={() => setSelectedBranchId(null)}
+          />
+          <div className="w-88 bg-slate-900/98 backdrop-blur-xl text-slate-100 border-r border-slate-700/80 shadow-[20px_0_50px_rgba(0,0,0,0.65)] z-30 flex flex-col shrink-0">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className={`p-2 rounded-xl border ${activeFlyoutBranch.badgeColor}`}>
+                  <activeFlyoutBranch.icon size={18} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-emerald-400">
+                    {activeFlyoutBranch.code} · SUB-TREE MODULES
+                  </div>
+                  <h3 className="text-sm font-bold text-white truncate">
+                    {activeFlyoutBranch.title}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedBranchId(null)}
+                className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
+                title="Close Sub-Tree Drawer"
+              >
+                <PanelLeftClose size={16} />
+              </button>
+            </div>
+
+            <div className="px-4 py-2 bg-slate-950/90 border-b border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
+              <span>
+                Click mode:{' '}
+                <strong className="text-emerald-400">
+                  {clickBehavior === 'POPOUT' ? 'POP-OUT WINDOW' : 'MAIN VIEW'}
+                </strong>
+              </span>
+              <span>{activeFlyoutBranch.items.length} workbenches</span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+              {activeFlyoutBranch.items.map((sub) => {
+                const SubIcon = sub.icon;
+                const isCurrentMain = location.pathname === sub.to;
+                const isPoppedOut = windows.some((w) => w.path === sub.to);
+                const isSplit = splitPath === sub.to;
+
+                return (
+                  <div
+                    key={sub.to}
+                    onClick={() => handleSubItemClick(sub)}
+                    className={`group rounded-xl p-3 border transition cursor-pointer ${
+                      isCurrentMain
+                        ? 'bg-emerald-950/40 border-emerald-500/60 shadow-sm'
+                        : 'bg-slate-950/70 hover:bg-slate-800/90 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="p-2 rounded-lg bg-slate-900 border border-slate-800 shrink-0">
+                          <SubIcon size={16} className={sub.accentColor} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-700 text-slate-300 font-bold">
+                              {sub.code}
+                            </span>
+                            <span className="text-xs font-bold text-white truncate">
+                              {sub.label}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                            {sub.description}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1.5">
+                      <div className="flex items-center gap-1">
+                        {isCurrentMain && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[9px] font-bold">
+                            ACTIVE MAIN
+                          </span>
+                        )}
+                        {isPoppedOut && (
+                          <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[9px] font-bold">
+                            POPPED OUT
+                          </span>
+                        )}
+                        {isSplit && (
+                          <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 font-mono text-[9px] font-bold">
+                            SPLIT PANE
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openPopoutWindow(sub.to, 'LG');
+                            setSelectedBranchId(null);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/30 text-[10px] font-mono font-semibold transition"
+                          title="Open as resizable Pop-Out Window over current page"
+                        >
+                          <ExternalLink size={11} />
+                          <span>Pop-Out</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openSideBySideSplit(sub.to);
+                            setSelectedBranchId(null);
+                          }}
+                          className="flex items-center gap-1 px-2 py-1 rounded-md bg-sky-600/20 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/30 text-[10px] font-mono font-semibold transition"
+                          title="Dock Side-by-Side on the right half of screen"
+                        >
+                          <Columns size={11} />
+                          <span>Side-by-Side</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSubItemClick(sub, true);
+                          }}
+                          className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-[10px] font-mono transition"
+                          title="Replace primary background canvas"
+                        >
+                          Main
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+        </>
+      )}
+
+      {/* MAIN WORKSPACE COLUMN */}
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <header className="h-14 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 lg:px-6 flex items-center justify-between gap-3 shrink-0 z-10">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="px-2 py-0.5 rounded-md bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 font-mono text-xs font-bold shrink-0">
+              {activeMeta.code}
+            </span>
+            <div className="truncate">
+              <div className="flex items-center gap-1.5 text-xs font-bold tracking-tight truncate">
+                <span className="text-slate-400 font-normal hidden sm:inline">
+                  {activeMeta.branchTitle} /
+                </span>
+                <span>{activeMeta.label}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 truncate hidden md:block">
+                {activeMeta.description}
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden xl:flex items-center gap-1.5">
             <button
+              type="button"
+              onClick={() => openPopoutWindow('/simulator', 'LG')}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 text-xs font-mono font-semibold transition"
+              title="Pop out Transaction Simulator"
+            >
+              <TerminalSquare size={13} />
+              <span>+ Simulator</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openSideBySideSplit('/transaction-logs')}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 border border-sky-500/25 text-xs font-mono font-semibold transition"
+              title="Open Transaction Log Inspector Side-by-Side"
+            >
+              <Columns size={13} />
+              <span>Split TX Logs</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openPopoutWindow('/customer-maintenance', 'XL')}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 text-violet-600 dark:text-violet-400 border border-violet-500/25 text-xs font-mono font-semibold transition"
+              title="Pop out Customer 360 Maintenance"
+            >
+              <CreditCard size={13} />
+              <span>+ Customer 360</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => openPopoutWindow('/hsm-workbench', 'MD')}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/25 text-xs font-mono font-semibold transition"
+              title="Pop out Thales 10K HSM Workbench"
+            >
+              <Cpu size={13} />
+              <span>+ HSM 10K</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <div
+              className="flex items-center bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200 dark:border-slate-800"
+              title="Choose what happens when you click a tab in the sidebar"
+            >
+              <button
+                type="button"
+                onClick={() => setClickBehavior('POPOUT')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition ${
+                  clickBehavior === 'POPOUT'
+                    ? 'bg-emerald-600 text-white shadow'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Layers size={12} />
+                <span>Pop-Out Mode</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setClickBehavior('MAIN_CANVAS')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[10px] font-mono font-bold transition ${
+                  clickBehavior === 'MAIN_CANVAS'
+                    ? 'bg-slate-800 text-white shadow'
+                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <Maximize2 size={12} />
+                <span>Page Mode</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => openPopoutWindow(location.pathname, 'LG')}
+              className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+              title="Pop out current page into a floating window"
+            >
+              <ExternalLink size={15} />
+            </button>
+
+            <button
+              type="button"
               onClick={toggleDark}
               className="p-2 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
-              title="Toggle Light/Dark Mode"
+              title="Toggle Light / Dark Theme"
             >
-              {dark ? <Sun size={16} /> : <Moon size={16} />}
+              {dark ? <Sun size={15} /> : <Moon size={15} />}
             </button>
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <div className="flex-1 flex overflow-hidden relative">
+          <main
+            style={{
+              width: splitPath ? `${100 - splitWidthPercent}%` : '100%',
+            }}
+            className="h-full overflow-y-auto p-6 transition-all duration-150"
+          >
+            {children}
+          </main>
+
+          {splitPath && splitMeta && (
+            <div
+              style={{ width: `${splitWidthPercent}%` }}
+              className="h-full border-l-2 border-emerald-500/40 bg-slate-50 dark:bg-slate-950 flex flex-col overflow-hidden shadow-2xl"
+            >
+              <div className="h-10 px-4 bg-slate-900 text-white border-b border-slate-800 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Columns size={14} className="text-sky-400 shrink-0" />
+                  <span className="px-1.5 py-0.5 rounded bg-sky-500/20 text-sky-300 font-mono text-[10px] font-bold">
+                    SIDE-BY-SIDE
+                  </span>
+                  <span className="text-xs font-bold truncate">{splitMeta.label}</span>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  {[35, 50, 60].map((pct) => (
+                    <button
+                      key={pct}
+                      type="button"
+                      onClick={() => setSplitWidthPercent(pct)}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                        splitWidthPercent === pct
+                          ? 'bg-sky-600 text-white font-bold'
+                          : 'bg-slate-800 text-slate-400 hover:text-white'
+                      }`}
+                      title={`Set split width to ${pct}%`}
+                    >
+                      {pct}%
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      openPopoutWindow(splitPath, 'LG');
+                      closeSideBySideSplit();
+                    }}
+                    className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-emerald-400"
+                    title="Undock into Floating Pop-out Window"
+                  >
+                    <ExternalLink size={13} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeSideBySideSplit}
+                    className="p-1 rounded hover:bg-rose-900/60 text-slate-400 hover:text-rose-300"
+                    title="Close Split View (ESC)"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5">
+                <IsolatedRouteViewport key={splitPath} initialPath={splitPath} />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      <FloatingWindowManager />
+
+      {commandPaletteOpen && (
+        <div
+          className="fixed inset-0 z-[1000] bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 p-4"
+          onClick={() => setCommandPaletteOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden text-slate-100"
+          >
+            <div className="p-3.5 border-b border-slate-800 flex items-center gap-3 bg-slate-950">
+              <Search size={18} className="text-emerald-400 shrink-0" />
+              <input
+                type="text"
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search any host workbench, BIN, HSM tool, limit engine, or journal..."
+                className="w-full bg-transparent text-sm text-white focus:outline-none font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setCommandPaletteOpen(false)}
+                className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-mono"
+              >
+                ESC
+              </button>
+            </div>
+
+            <div className="max-h-96 overflow-y-auto p-2 divide-y divide-slate-800/60">
+              {filteredSearchItems.map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <div
+                    key={item.to}
+                    className="p-2.5 hover:bg-slate-800/80 rounded-xl flex items-center justify-between gap-3 transition"
+                  >
+                    <div
+                      onClick={() => {
+                        openPopoutWindow(item.to, 'LG');
+                        setCommandPaletteOpen(false);
+                      }}
+                      className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer"
+                    >
+                      <div className="p-2 rounded-lg bg-slate-950 border border-slate-800">
+                        <ItemIcon size={16} className={item.accentColor} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] text-emerald-400 font-bold">
+                            {item.code}
+                          </span>
+                          <span className="text-xs font-bold text-white truncate">
+                            {item.label}
+                          </span>
+                          <span className="text-[10px] font-mono text-slate-500">
+                            ({item.branchTitle})
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate">
+                          {item.description}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openPopoutWindow(item.to, 'LG');
+                          setCommandPaletteOpen(false);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-mono font-bold"
+                      >
+                        Pop-Out
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          openSideBySideSplit(item.to);
+                          setCommandPaletteOpen(false);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-sky-600/30 hover:bg-sky-600 text-sky-300 hover:text-white border border-sky-500/40 text-[10px] font-mono font-bold"
+                      >
+                        Split
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate(item.to);
+                          setCommandPaletteOpen(false);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-mono"
+                      >
+                        Main
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,141 +1,78 @@
+# E:\HSM_V2\thales-soft-hsm\fix_hsm_render_url.py
 """
-fix_import_error.py
-Defines _execute_safe_provider_switch in lmk_key_management_router.py
-and cleans up main.py import.
+Automated Production Patcher for Thales 10K Soft-HSM Frontend
+Sets default production backend URL to https://thales-10k-soft-hsm.onrender.com
 """
 
-import ast
-import subprocess
-import sys
+import shutil
+from datetime import datetime
 from pathlib import Path
 
-PROD_DIR = Path(r"E:\HOST_VSCODE\host-simulator-github-prod")
-if not PROD_DIR.exists():
-    PROD_DIR = Path(".")
+HSM_ROOT = Path(r"E:\HSM_V2\thales-soft-hsm")
+if not HSM_ROOT.exists():
+    HSM_ROOT = Path(__file__).resolve().parent
 
-print(f"Fixing import error in: {PROD_DIR.resolve()}")
+BACKUP_DIR = HSM_ROOT / "_backups" / f"render_url_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+RENDER_HSM_BASE = "https://thales-10k-soft-hsm.onrender.com"
 
-# 1. Patch backend/app/routers/lmk_key_management_router.py to export _execute_safe_provider_switch
-router_path = PROD_DIR / "backend" / "app" / "routers" / "lmk_key_management_router.py"
-if router_path.exists():
-    r_code = router_path.read_text(encoding="utf-8")
-    
-    if "_execute_safe_provider_switch" not in r_code:
-        helper_def = '''
 
-def _execute_safe_provider_switch(payload: Dict[str, Any], db: Session) -> Dict[str, Any]:
-    raw_target = (
-        payload.get("provider_type")
-        or payload.get("provider")
-        or payload.get("hsm_mode")
-        or payload.get("mode")
-        or payload.get("target_provider")
-        or "INTERNAL_HSM"
-    )
-    target = str(raw_target).upper().strip()
+def backup_file(path: Path) -> None:
+    if path.exists():
+        BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, BACKUP_DIR / path.name)
+        print(f"[BACKUP] {path.name} -> {BACKUP_DIR / path.name}")
 
-    if any(k in target for k in ("EXT", "REMOTE", "THALES", "CLOUD")):
-        settings.HSM_MODE = "SOFT_HSM_REMOTE"
-        active_provider = "EXTERNAL_HSM"
-    else:
-        settings.HSM_MODE = "SOFT_HSM_LOCAL"
-        active_provider = "INTERNAL_HSM"
 
-    try:
-        from app.models import HostParameter
-        hp = db.query(HostParameter).filter(HostParameter.parameter_name == "HSM_MODE").first()
-        if hp:
-            hp.parameter_value = {"mode": settings.HSM_MODE, "provider_type": active_provider}
-            db.commit()
-    except Exception:
-        db.rollback()
+def main():
+    print("=" * 75)
+    print(f" Setting Default Render URL in Soft-HSM Frontend: {RENDER_HSM_BASE}")
+    print("=" * 75)
 
-    try:
-        from app.seed_data import seed_external_hsm_keys_if_needed
-        seed_external_hsm_keys_if_needed(db)
-    except Exception:
-        pass
+    client_js = HSM_ROOT / "js" / "hsm_api_client.js"
+    if client_js.exists():
+        backup_file(client_js)
+        text = client_js.read_text(encoding="utf-8")
+        old_fn = '''        static getBaseUrl() {
+            const saved = localStorage.getItem(STORAGE_KEY_API_URL);
+            if (saved && saved.trim()) {
+                return saved.trim().replace(/\\/+$/, "");
+            }
+            if (window.VITE_API_BASE_URL) {
+                return window.VITE_API_BASE_URL.replace(/\\/+$/, "");
+            }
+            if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+                return "http://127.0.0.1:8001";
+            }
+            return "";
+        }'''
 
-    svc = LMKKeyManagementService(db)
-    try:
-        if active_provider == "EXTERNAL_HSM":
-            svc.seed_fallback_external_keys()
-            svc.sync_default_external_keys("admin")
-    except Exception:
-        pass
+        new_fn = f'''        static getBaseUrl() {{
+            const saved = localStorage.getItem(STORAGE_KEY_API_URL);
+            if (saved && saved.trim() && !saved.includes("127.0.0.1") && !saved.includes("localhost")) {{
+                return saved.trim().replace(/\\/+$/, "");
+            }}
+            if (window.VITE_API_BASE_URL) {{
+                return window.VITE_API_BASE_URL.replace(/\\/+$/, "");
+            }}
+            if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {{
+                return saved && saved.trim() ? saved.trim().replace(/\\/+$/, "") : "{RENDER_HSM_BASE}";
+            }}
+            return "{RENDER_HSM_BASE}";
+        }}'''
 
-    try:
-        status_info = svc.get_lmk_and_provider_status()
-        status_info["online"] = True
-        status_info["active_provider"] = active_provider
-        status_info["hsm_mode"] = settings.HSM_MODE
-    except Exception:
-        status_info = {
-            "active_provider": active_provider,
-            "hsm_mode": settings.HSM_MODE,
-            "online": True,
-            "hsm_state": "AUTHORIZED_ONLINE",
-            "lmk_id": "00",
-            "lmk_check_value": "D3B82A0000000000" if active_provider == "EXTERNAL_HSM" else "A1B2C30000000000",
-            "lmk_kcv_short": "D3B82A" if active_provider == "EXTERNAL_HSM" else "A1B2C3",
-            "firmware": "1347-0900",
-            "remote_url": settings.HSM_REMOTE_URL,
-            "key_counts": {"internal_keys": 8, "external_keys": 8, "lmk_domain_mismatched_keys": 0},
-        }
+        if "static getBaseUrl()" in text:
+            # Replace getBaseUrl method cleanly
+            start_idx = text.find("static getBaseUrl()")
+            end_idx = text.find("static setBaseUrl(", start_idx)
+            if start_idx != -1 and end_idx != -1:
+                text = text[:start_idx] + new_fn.lstrip() + "\n\n        " + text[end_idx:]
+                client_js.write_text(text, encoding="utf-8")
+                print(f"[UPDATED] {client_js}")
 
-    return {
-        "status": "OK",
-        "switched": True,
-        "active_provider": active_provider,
-        "provider_type": active_provider,
-        "hsm_mode": settings.HSM_MODE,
-        "online": True,
-        "lmk_check_value": status_info.get("lmk_check_value", "D3B82A0000000000"),
-        "lmk_kcv_short": status_info.get("lmk_kcv_short", "D3B82A"),
-        "provider_status": status_info,
-        **status_info,
-    }
-'''
-        r_code += helper_def
-        router_path.write_text(r_code, encoding="utf-8")
-        ast.parse(r_code)
-        print("[APPLIED] Defined _execute_safe_provider_switch in lmk_key_management_router.py")
+    print("=" * 75)
+    print(" SOFT-HSM FRONTEND PATCH COMPLETE!")
+    print("=" * 75)
 
-# 2. Patch backend/app/main.py to import cleanly or define fallback route directly
-main_path = PROD_DIR / "backend" / "app" / "main.py"
-if main_path.exists():
-    m_code = main_path.read_text(encoding="utf-8")
-    
-    # Replace the problematic import block with a self-contained handler in main.py if needed
-    if "from app.routers.lmk_key_management_router import _execute_safe_provider_switch" in m_code:
-        m_code = m_code.replace(
-            "from app.routers.lmk_key_management_router import _execute_safe_provider_switch",
-            "from app.config import settings\nfrom app.lmk_key_management_service import LMKKeyManagementService"
-        )
-    
-    # Ensure universal switch routes in main.py call LMKKeyManagementService directly
-    universal_route_block = '''
-@app.post("/api/hsm/lmk/provider")
-@app.put("/api/hsm/lmk/provider")
-@app.post("/api/hsm/lmk/provider/switch")
-@app.post("/api/hsm/provider/switch")
-@app.post("/api/hsm/provider")
-@app.put("/api/hsm/provider")
-@app.post("/api/hsm/mode")
-@app.put("/api/hsm/mode")
-@app.post("/api/lmk/provider/switch")
-def universal_hsm_provider_switch(payload: Dict[str, Any] = Body(default={}), db: Session = Depends(get_db)):
-    from app.routers.lmk_key_management_router import _execute_safe_provider_switch
-    return _execute_safe_provider_switch(payload, db)
-'''
-    if "universal_hsm_provider_switch" in m_code:
-        # Update function to dynamically import
-        pass
-    else:
-        m_code = m_code.replace('@app.get("/health")', universal_route_block + '\n\n@app.get("/health")')
 
-    main_path.write_text(m_code, encoding="utf-8")
-    ast.parse(m_code)
-    print("[APPLIED] Cleaned main.py routing imports.")
-
-print("\n[SUCCESS] Fix applied. Now pushing to GitHub...")
+if __name__ == "__main__":
+    main()

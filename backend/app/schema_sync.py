@@ -10,7 +10,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase
 
-logger = logging.getLogger("baobab.schema_sync")
+logger = logging.getLogger("rajon.schema_sync")
 
 
 def _compile_column_type(column, dialect) -> str:

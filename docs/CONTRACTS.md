@@ -1,4 +1,4 @@
-# BAOBAB PRIVATE HOST SIMULATOR — PUBLIC CONTRACTS & INTERFACES
+# RAJON PRIVATE HOST SIMULATOR — PUBLIC CONTRACTS & INTERFACES
 
 Tracks database tables, columns, API routes, schemas, settings, and React routes.
 
@@ -96,7 +96,7 @@ Tracks database tables, columns, API routes, schemas, settings, and React routes
 ## `step09` — Step 9 — Simulator Improvements & Dual-Codec Wire Parser
 - **Module**: `backend/app/iso_standard_codec.py` (`decode_iso8583_1987`, `build_iso8583_1987`).
 - **POST /api/simulator/parse-raw**: Accepts raw wire string, auto-detects `TIC_V2164E` (A4M) or `ISO8583_1987` (Hex bitmap), returns parsed fields and matched transaction code.
-- **Client-Side Persistence**: Simulator fields, helper PIN, and transaction checks persist in browser `sessionStorage` (`BAOBAB_SIMULATOR_STATE`), surviving navigation and page refreshes.
+- **Client-Side Persistence**: Simulator fields, helper PIN, and transaction checks persist in browser `sessionStorage` (`RAJON_SIMULATOR_STATE`), surviving navigation and page refreshes.
 
 <!-- CONTRACT:step10 -->
 ## `step10` — Step 10 — HSM Key Ceremony & Management Contracts
@@ -131,4 +131,4 @@ Tracks database tables, columns, API routes, schemas, settings, and React routes
 - **Table**: `simulator_saved_cases` (id, name unique, description, mti, transaction_code, clear_pin_helper, fields JSON, enabled_fields JSON, created_at, updated_at)
 - **GET /api/simulator-workbench/next-ids**: last STAN/RRN in `transactions` and the next free values
 - **GET/POST /api/simulator-workbench/cases**, **GET/PUT/DELETE /api/simulator-workbench/cases/{id}**: saved simulator cases (POST returns 409 for a duplicate name unless `overwrite` is true)
-- **Browser storage**: key `BAOBAB_SIMULATOR_STATE_V2` (localStorage) holds the last simulator session
+- **Browser storage**: key `RAJON_SIMULATOR_STATE_V2` (localStorage) holds the last simulator session

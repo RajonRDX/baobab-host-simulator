@@ -22,6 +22,7 @@ from app.iso_standard_codec import decode_iso8583_1987, build_iso8583_1987
 from app.logging_service import monitor_hub, record_system_log
 # [PATCH step03_01:api_routes_audit_imports]
 from app.audit_service import record_audit, serialize_entity
+from app.customer_360 import customer_profile_fields
 # [PATCH step12:api_routes_settlement_service_import]
 from app.settlement_service import execute_daily_cutover, get_reconciliation_summary
 # [PATCH step10:api_routes_ceremony_service_import]
@@ -928,7 +929,21 @@ def create_card(payload: CardCreate, db: Session = Depends(get_db), current_user
         card_product=payload.card_product,
         card_status=payload.card_status,
         linked_account_id=payload.linked_account_id,
-        card_profile_id=payload.card_profile_id,
+        # [PATCH step13_03:card_inherit_bin_card_profile]
+        card_profile_id=payload.card_profile_id or (
+            next(
+                (
+                    b.card_profile_id
+                    for b in sorted(
+                        db.query(BinRange).filter(BinRange.status == 'ACTIVE').all(),
+                        key=lambda x: len(x.bin_prefix or ''),
+                        reverse=True,
+                    )
+                    if payload.test_pan_reference.startswith(b.bin_prefix) and getattr(b, 'card_profile_id', None)
+                ),
+                None,
+            )
+        ),
         institution_id=inst_id,
     )
     db.add(card)
@@ -1374,9 +1389,16 @@ def generate_test_card_endpoint(payload: CardGenerateRequest, db: Session = Depe
     if not acct:
         acct = db.query(Account).first()
 
-    # Calculate PVV and CVV
+    # [PATCH customer_360:gen_card_expiry]
+    # Expiry is chosen by the user; default = 3 years from today (no more fixed 12/2028)
+    _now = datetime.now(timezone.utc)
+    exp_month = payload.expiry_month or _now.month
+    exp_year = payload.expiry_year or (_now.year + 3)
+    exp_yymm = f"{str(exp_year)[-2:]}{int(exp_month):02d}"
+
+    # Calculate PVV and CVV (CVV depends on the expiry)
     pvv_calc = calculate_visa_pvv_detailed(pan, payload.initial_pin, '1', 'PVK_VISA_01')
-    cvv_calc = calculate_cvv_detailed(pan, '2812', '101', 'CVK_MAIN_01')
+    cvv_calc = calculate_cvv_detailed(pan, exp_yymm, '101', 'CVK_MAIN_01')
 
     card = Card(
         customer_id=cust.id,
@@ -1384,12 +1406,13 @@ def generate_test_card_endpoint(payload: CardGenerateRequest, db: Session = Depe
         test_pan_reference=pan,
         masked_pan=mask_pan(pan),
         cardholder_name=payload.cardholder_name.upper(),
-        expiry_month=12,
-        expiry_year=2028,
+        expiry_month=exp_month,
+        expiry_year=exp_year,
         card_type=payload.card_type,
         card_product=payload.card_product or bin_match.card_product,
         card_status='ACTIVE',
         linked_account_id=acct.id if acct else None,
+        card_profile_id=getattr(bin_match, 'card_profile_id', None),
         institution_id=inst_id,
     )
     db.add(card)
@@ -1817,7 +1840,7 @@ def simulator_decode_message(payload: Dict[str, str], _: str = Depends(get_curre
 @router.post('/simulator/parse-raw', response_model=RawMessageParseResponse)
 def parse_raw_wire_message(payload: RawMessageParseRequest, _: str = Depends(get_current_user)):
     msg = payload.raw_message.strip()
-    # Check if message is Compass Plus TIC/TCI (starts with A4M or contains A4M)
+    # Check if message is Rajon TIC/TCI (starts with A4M or contains A4M)
     if 'A4M' in msg:
         decoded = decode_tic_message(msg)
         if not decoded.get('valid'):
@@ -1862,7 +1885,7 @@ def parse_raw_wire_message(payload: RawMessageParseRequest, _: str = Depends(get
         mti='0200',
         fields={},
         detailed_fields={},
-        error='Unable to auto-detect message format (neither Compass Plus A4M TIC nor Standard ISO 8583)',
+        error='Unable to auto-detect message format (neither Rajon A4M TIC nor Standard ISO 8583)',
     )
 
 
@@ -2862,6 +2885,12 @@ def search_maintenance_data(
                 | (Customer.last_name.ilike(term))
                 | (Customer.mobile_number.ilike(term))
                 | (Customer.email.ilike(term))
+                # [PATCH customer_360:search_more_fields]
+                | (Customer.nid_number.ilike(term))
+                | (Customer.passport_number.ilike(term))
+                | (Customer.alternate_mobile.ilike(term))
+                | (Customer.father_name.ilike(term))
+                | (Customer.mother_name.ilike(term))
                 | (Customer.id == exact)
             ).all():
                 matched_cust_ids_set.add(c.id)
@@ -3107,6 +3136,7 @@ def search_maintenance_data(
             "email": cust.email,
             "mobile_number": cust.mobile_number,
             "address": cust.address,
+            **customer_profile_fields(cust),
             "customer_status": cust.customer_status,
             "risk_category": cust.risk_category,
             "institution_id": cust.institution_id,

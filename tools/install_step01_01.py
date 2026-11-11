@@ -350,7 +350,7 @@ def seed_processing_systems_and_institutions(db: Session) -> None:
             True,
             True,
             {
-                "protocol": "Compass Plus TW TIC/TCI v2.164e",
+                "protocol": "Rajon TIC/TCI v2.164e",
                 "country": "BD",
                 "default_currency": "BDT",
                 "header_h1": "A4M",
@@ -399,7 +399,7 @@ def seed_processing_systems_and_institutions(db: Session) -> None:
         ),
         (
             "INTERNAL",
-            "BAOBAB Internal Host Loopback",
+            "RAJON Internal Host Loopback",
             "INTERNAL",
             "TIC_V2164E",
             True,

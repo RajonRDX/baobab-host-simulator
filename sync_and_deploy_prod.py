@@ -149,7 +149,7 @@ def validate_python_file(path: Path) -> None:
 
 def main() -> None:
     print("=" * 78)
-    print("BAOBAB HOST SIMULATOR — PRODUCTION SYNC & REPAIR TOOL")
+    print("RAJON HOST SIMULATOR — PRODUCTION SYNC & REPAIR TOOL")
     print(f"Production Dir : {PROD_DIR}")
     print(f"Test Dir       : {TEST_DIR}")
     print("=" * 78)
@@ -206,7 +206,7 @@ def main() -> None:
     if '"User-Agent"' not in lkms_src and "'User-Agent'" not in lkms_src:
         lkms_src = lkms_src.replace(
             'headers={"Content-Type": "application/json"}',
-            'headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "BAOBAB-Host-Simulator/1.0"}',
+            'headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": "RAJON-Host-Simulator/1.0"}',
         )
 
     # Ensure DEFAULT_EXTERNAL_HSM_KEYS is defined
@@ -423,7 +423,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     # Application
-    APP_NAME: str = "BAOBAB Private Host Simulator"
+    APP_NAME: str = "RAJON Private Host Simulator"
     APP_ENV: str = "production"
 
     # Security

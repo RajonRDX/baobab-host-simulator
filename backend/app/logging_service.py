@@ -10,7 +10,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-7s | %(name)s | %(message)s",
 )
-logger = logging.getLogger("baobab.host")
+logger = logging.getLogger("rajon.host")
 
 
 class ExecutionMonitorHub:

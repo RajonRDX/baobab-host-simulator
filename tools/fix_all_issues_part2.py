@@ -2,7 +2,7 @@
 """
 fix_all_issues_part2.py (Part 2 of 3 — Backend Routers, Limit Usage Reset, Routing Engine)
 ==========================================================================================
-BAOBAB Private Host Simulator — Enterprise Payment Switch Backend Repair & Enhancement Pack
+RAJON Private Host Simulator — Enterprise Payment Switch Backend Repair & Enhancement Pack
 
 Applies all backend fixes and enhancements:
   1. Customer Management CRUD (fixes HTTP 500 on delete, checks foreign keys across cards,
@@ -199,7 +199,7 @@ def apply_part2(engine: SafeRepairEngine) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="BAOBAB Payment Switch Repair — Part 2 (Backend)")
+    parser = argparse.ArgumentParser(description="RAJON Payment Switch Repair — Part 2 (Backend)")
     parser.add_argument("--dry-run", action="store_true", help="Simulate without modifying disk")
     args = parser.parse_args()
 

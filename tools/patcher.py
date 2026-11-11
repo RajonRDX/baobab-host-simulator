@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 tools/patcher.py — Enterprise Installer & Anchored Patch Framework
-BAOBAB Private Host Simulator | Windows CRLF & Idempotent Patch Engine
+RAJON Private Host Simulator | Windows CRLF & Idempotent Patch Engine
 """
 
 import argparse
@@ -231,7 +231,7 @@ class PatcherSession:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines: List[str] = []
         if header_needed:
-            lines.append("# BAOBAB PRIVATE HOST SIMULATOR — IMPLEMENTATION PROGRESS\n")
+            lines.append("# RAJON PRIVATE HOST SIMULATOR — IMPLEMENTATION PROGRESS\n")
             lines.append("Authoritative execution log updated automatically by `tools/patcher.py`.\n")
 
         lines.append(f"## [{now_str}] `{self.step_id}` — {self.title}")
@@ -270,7 +270,7 @@ class PatcherSession:
 
         lines: List[str] = []
         if header_needed:
-            lines.append("# BAOBAB PRIVATE HOST SIMULATOR — PUBLIC CONTRACTS & INTERFACES\n")
+            lines.append("# RAJON PRIVATE HOST SIMULATOR — PUBLIC CONTRACTS & INTERFACES\n")
             lines.append("Tracks database tables, columns, API routes, schemas, settings, and React routes.\n")
         lines.append(marker_tag)
         lines.append(f"## `{self.step_id}` — {section_title}")
@@ -327,5 +327,5 @@ def parse_installer_args(description: str) -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    args = parse_installer_args("BAOBAB Shared Patcher Framework")
-    print(f"[OK] BAOBAB Patcher Framework ready at {BASE_DIR} (dry_run={args.dry_run})")
+    args = parse_installer_args("RAJON Shared Patcher Framework")
+    print(f"[OK] RAJON Patcher Framework ready at {BASE_DIR} (dry_run={args.dry_run})")

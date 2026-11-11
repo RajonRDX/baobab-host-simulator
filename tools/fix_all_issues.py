@@ -2,7 +2,7 @@
 """
 fix_all_issues.py (Part 1 of 3 — Master Orchestrator, Database Models, Schemas & Seed Data)
 ===========================================================================================
-BAOBAB Private Host Simulator — Enterprise Payment Switch Review, Bug Fixes & Feature Pack
+RAJON Private Host Simulator — Enterprise Payment Switch Review, Bug Fixes & Feature Pack
 
 Designed by Senior Payment Switch Architect (Visa/Mastercard/ITCL QCash Host Engineering).
 Works seamlessly with your existing `tools/patcher.py` conventions, creates timestamped
@@ -42,7 +42,7 @@ def resolve_project_root() -> Path:
         if (cand / "backend" / "app" / "models.py").exists() and (cand / "frontend" / "src" / "App.tsx").exists():
             return cand.resolve()
     raise RuntimeError(
-        "CRITICAL: Could not locate BAOBAB Host Simulator project root "
+        "CRITICAL: Could not locate RAJON Host Simulator project root "
         "(expected backend/app/models.py and frontend/src/App.tsx). "
         "Please run this script from your project root directory."
     )
@@ -454,7 +454,7 @@ def apply_part1(engine: SafeRepairEngine) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="BAOBAB Payment Switch Comprehensive Repair & Enhancement Pack (Master Orchestrator)"
+        description="RAJON Payment Switch Comprehensive Repair & Enhancement Pack (Master Orchestrator)"
     )
     parser.add_argument(
         "--dry-run",
@@ -469,7 +469,7 @@ def main() -> int:
     args = parser.parse_args()
 
     print("=" * 78)
-    print("  BAOBAB PRIVATE HOST SIMULATOR — COMPREHENSIVE ARCHITECT REPAIR")
+    print("  RAJON PRIVATE HOST SIMULATOR — COMPREHENSIVE ARCHITECT REPAIR")
     print(f"  Project Root : {PROJECT_ROOT}")
     print(f"  Mode         : {'DRY-RUN (no files modified)' if args.dry_run else 'LIVE EXECUTION'}")
     print("=" * 78)

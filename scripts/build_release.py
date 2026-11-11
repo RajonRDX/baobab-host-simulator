@@ -38,12 +38,12 @@ REQUIRED_OTHER_FILES = [
 ]
 
 EXCLUDE_DIRS = {".venv", "venv", "node_modules", "__pycache__", ".git", "release", "dist"}
-EXCLUDE_FILES = {".env", "baobab_host.db"}
+EXCLUDE_FILES = {".env", "rajon_host.db"}
 
 
 def main() -> int:
     print("=" * 72)
-    print("  BAOBAB HOST SIMULATOR — RELEASE VALIDATOR & ZIP BUILDER")
+    print("  RAJON HOST SIMULATOR — RELEASE VALIDATOR & ZIP BUILDER")
     print("=" * 72)
 
     missing = []
@@ -75,7 +75,7 @@ def main() -> int:
 
     print("[OK] All Python backend files passed syntax verification.")
 
-    release_dir = ROOT_DIR / "release" / "baobab-host-simulator"
+    release_dir = ROOT_DIR / "release" / "rajon-host-simulator"
     if release_dir.exists():
         shutil.rmtree(release_dir)
     release_dir.mkdir(parents=True, exist_ok=True)
@@ -95,7 +95,7 @@ def main() -> int:
             shutil.copy2(item, target)
             copied_count += 1
 
-    zip_path = ROOT_DIR / "baobab-host-simulator-release.zip"
+    zip_path = ROOT_DIR / "rajon-host-simulator-release.zip"
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
         for file_path in release_dir.rglob("*"):
             if file_path.is_file():

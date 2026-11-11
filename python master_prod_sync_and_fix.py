@@ -95,7 +95,7 @@ if lkms_file.exists():
         self.headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "BAOBAB-Host-Simulator/2.0",
+            "User-Agent": "RAJON-Host-Simulator/2.0",
         }
 
     def execute_command(
@@ -103,7 +103,7 @@ if lkms_file.exists():
         raw_command: str,
         header_length: int = 4,
         synthetic_mode: bool = False,
-        source_host: str = "BAOBAB_HOST_KEY_MANAGER",
+        source_host: str = "RAJON_HOST_KEY_MANAGER",
     ) -> Dict[str, Any]:
         payload = {
             "command": raw_command,

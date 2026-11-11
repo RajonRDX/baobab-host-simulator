@@ -75,7 +75,7 @@ class ExternalSoftHSMClient:
         self.url = f"{base}{endpoint}"
         self.connect_timeout = max(1.0, float(config.connect_timeout_ms or 5000) / 1000.0)
         self.read_timeout = max(1.0, float(config.read_timeout_ms or 10000) / 1000.0)
-        self.source_host = config.source_host_id or "BAOBAB_HOST_SIMULATOR"
+        self.source_host = config.source_host_id or "RAJON_HOST_SIMULATOR"
         self.header_length = config.header_length or 4
         self.framing_mode = config.framing_mode or "ASCII"
 

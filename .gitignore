@@ -5,9 +5,7 @@ __pycache__/
 .venv/
 venv/
 env/
-# *.db (Allowed for baobab_host.db sync)
-!baobab_host.db
-!backend/baobab_host.db
+*.db
 *.sqlite3
 
 # Secrets

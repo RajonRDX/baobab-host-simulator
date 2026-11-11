@@ -44,7 +44,6 @@ def get_key_management_audit_deliverable(
     Soft-HSM codebase and Thales payShield 10K manuals (PUGD0537-004, PUGD0538-003, PUGD0539-003).
     """
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     live_status = svc.get_lmk_and_provider_status()
     return {
         "1_lmk_generation_mechanism": (
@@ -106,7 +105,6 @@ def get_lmk_status(
     _: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     return svc.get_lmk_and_provider_status()
 
 
@@ -116,9 +114,19 @@ def switch_hsm_provider(
     db: Session = Depends(get_db),
     _: str = Depends(get_current_user),
 ):
-    return _execute_safe_provider_switch(
-        {"provider_mode": payload.provider_mode, "remote_url": payload.remote_url}, db
-    )
+    mode_in = payload.provider_mode.upper().strip()
+    if mode_in in ("EXTERNAL_HSM", "SOFT_HSM_REMOTE"):
+        settings.HSM_MODE = "SOFT_HSM_REMOTE"
+    elif mode_in in ("INTERNAL_HSM", "SOFT_HSM_LOCAL"):
+        settings.HSM_MODE = "SOFT_HSM_LOCAL"
+    else:
+        raise HTTPException(status_code=400, detail="provider_mode must be 'INTERNAL_HSM' or 'EXTERNAL_HSM'")
+
+    if payload.remote_url:
+        settings.HSM_REMOTE_URL = payload.remote_url.strip()
+
+    svc = LMKKeyManagementService(db)
+    return svc.get_lmk_and_provider_status()
 
 
 @router.get("/keys")
@@ -129,7 +137,6 @@ def list_provider_keys(
     _: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     active_prov = svc.active_provider_type()
     target_prov = (provider_type or active_prov).upper().strip()
 
@@ -154,7 +161,6 @@ def sync_seeded_external_keys(
     current_user: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     try:
         return svc.sync_default_external_keys(current_user=current_user)
     except Exception as exc:
@@ -168,7 +174,6 @@ def generate_external_key_a0(
     current_user: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     try:
         return svc.generate_key_via_soft_hsm_a0(payload.model_dump(), current_user=current_user)
     except ConnectionError as ce:
@@ -184,7 +189,6 @@ def import_external_key_a6(
     current_user: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     try:
         return svc.import_key_via_soft_hsm_a6(payload.model_dump(), current_user=current_user)
     except ConnectionError as ce:
@@ -200,7 +204,6 @@ def export_external_key_a8(
     _: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     try:
         return svc.export_key_via_soft_hsm_a8(payload.model_dump())
     except ConnectionError as ce:
@@ -216,7 +219,6 @@ def verify_external_key_kcv_bu(
     _: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     try:
         return svc.verify_key_kcv_via_soft_hsm_bu(key_identifier)
     except ConnectionError as ce:
@@ -232,7 +234,6 @@ def rotate_external_key_a0(
     current_user: str = Depends(get_current_user),
 ):
     svc = LMKKeyManagementService(db)
-    svc.seed_fallback_external_keys()
     try:
         return svc.rotate_external_key(
             key_identifier=payload.key_identifier,
@@ -244,95 +245,3 @@ def rotate_external_key_a0(
         raise HTTPException(status_code=502, detail=str(ce))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
-
-
-# [PATCH provider_switch_fast]
-def _execute_safe_provider_switch(payload: Dict[str, Any], db: Session) -> Dict[str, Any]:
-    """
-    Fast, always-answering provider switch used by /provider and the universal routes.
-    No long remote chains: local seed + one short probe of the Soft-HSM (which also wakes Render).
-    """
-    import json as _json
-    import logging as _logging
-    import urllib.request as _urlreq
-
-    log = _logging.getLogger("baobab.host")
-    raw_target = (
-        payload.get("provider_mode")
-        or payload.get("provider_type")
-        or payload.get("provider")
-        or payload.get("hsm_mode")
-        or payload.get("mode")
-        or payload.get("target_provider")
-        or ""
-    )
-    target = str(raw_target).upper().strip()
-    if any(k in target for k in ("EXT", "REMOTE", "THALES", "CLOUD")):
-        settings.HSM_MODE = "SOFT_HSM_REMOTE"
-        active_provider = "EXTERNAL_HSM"
-    elif any(k in target for k in ("INT", "LOCAL")):
-        settings.HSM_MODE = "SOFT_HSM_LOCAL"
-        active_provider = "INTERNAL_HSM"
-    else:
-        raise HTTPException(status_code=400, detail="provider_mode must be 'INTERNAL_HSM' or 'EXTERNAL_HSM'")
-
-    remote_url = payload.get("remote_url")
-    if remote_url:
-        settings.HSM_REMOTE_URL = str(remote_url).strip()
-
-    svc = LMKKeyManagementService(db)
-    try:
-        svc.seed_fallback_external_keys()  # local only, never overwrites real tokens
-    except Exception:
-        db.rollback()
-        log.exception("seed_fallback_external_keys failed during provider switch")
-
-    counts = {"internal_keys": 0, "external_keys": 0}
-    try:
-        counts["internal_keys"] = db.query(HsmKeyReference).filter(HsmKeyReference.provider_type == "INTERNAL_HSM").count()
-        counts["external_keys"] = db.query(HsmKeyReference).filter(HsmKeyReference.provider_type == "EXTERNAL_HSM").count()
-    except Exception:
-        db.rollback()
-
-    if active_provider == "INTERNAL_HSM":
-        status_info = svc.get_lmk_and_provider_status()  # no network in internal mode
-    else:
-        online, remote, warning = False, {}, None
-        try:
-            req = _urlreq.Request(
-                svc.bridge.status_url,
-                headers={"Accept": "application/json", "User-Agent": "BAOBAB-Host-Simulator/1.0"},
-                method="GET",
-            )
-            with _urlreq.urlopen(req, timeout=8) as resp:
-                remote = _json.loads(resp.read().decode("utf-8"))
-                online = True
-        except Exception as exc:
-            warning = f"External Soft-HSM did not answer in 8s (Render may be waking up): {exc}"
-            log.warning(warning)
-        lmk_cv = remote.get("lmk_check_value") or ("D3B82A0000000000" if online else "UNREACHABLE")
-        status_info = {
-            "active_provider": "EXTERNAL_HSM",
-            "hsm_mode": settings.HSM_MODE,
-            "online": online,
-            "hsm_state": remote.get("hsm_state", "AUTHORIZED_ONLINE" if online else "OFFLINE_UNREACHABLE"),
-            "lmk_id": "00",
-            "lmk_check_value": lmk_cv,
-            "lmk_kcv_short": lmk_cv[:6],
-            "firmware": remote.get("firmware", "N/A"),
-            "remote_url": svc.bridge.execute_url,
-            "key_counts": counts,
-        }
-        if warning:
-            status_info["warning"] = warning
-
-    status_info["active_provider"] = active_provider
-    status_info["hsm_mode"] = settings.HSM_MODE
-    return {
-        "status": "OK",
-        "switched": True,
-        "provider_type": active_provider,
-        **status_info,
-    }
-
-

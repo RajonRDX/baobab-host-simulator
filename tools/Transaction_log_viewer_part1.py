@@ -97,7 +97,7 @@ class SafeInstaller:
 
 
 TIC_DECODER_ENGINE_PY = r'''"""
-tic_decoder_engine.py — Integrated Compass Plus TW TIC/TCI v2.164e & ISO 8583:1987 Decoder
+tic_decoder_engine.py — Integrated Rajon TIC/TCI v2.164e & ISO 8583:1987 Decoder
 Reuses the complete field definitions, lookup tables, subfield parsers (_pf3.._pf126, UAMP F123-F125),
 and Excel/Text report formatters from `tic_decoder.py`, while enforcing strict payment-switch
 security masking (PAN, PIN blocks, CVV/CVV2, Track 1/2, and secret keys).
@@ -1380,7 +1380,7 @@ def main():
     args = parser.parse_args()
 
     root = detect_project_root(args.project_root)
-    print(f"=== BAOBAB Transaction Log Viewer Installer v1 ===\nProject Root: {root}\nDry Run: {args.dry_run}")
+    print(f"=== RAJON Transaction Log Viewer Installer v1 ===\nProject Root: {root}\nDry Run: {args.dry_run}")
     installer = SafeInstaller(root, dry_run=args.dry_run)
     apply_v1(installer)
 

@@ -114,7 +114,7 @@ class HsmProviderConfig(Base):
     api_endpoint: Mapped[str] = mapped_column(String(120), nullable=False, default="/api/host/command")
     framing_mode: Mapped[str] = mapped_column(String(20), nullable=False, default="ASCII")  # ASCII | HEX_TCP
     header_length: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
-    source_host_id: Mapped[str] = mapped_column(String(60), nullable=False, default="BAOBAB_HOST_SIMULATOR")
+    source_host_id: Mapped[str] = mapped_column(String(60), nullable=False, default="RAJON_HOST_SIMULATOR")
     connect_timeout_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=5000)
     read_timeout_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=10000)
     tls_verify: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
@@ -240,7 +240,7 @@ class HsmProviderConfigUpdate(BaseModel):
     api_endpoint: Optional[str] = "/api/host/command"
     framing_mode: Optional[str] = "ASCII"
     header_length: Optional[int] = 4
-    source_host_id: Optional[str] = "BAOBAB_HOST_SIMULATOR"
+    source_host_id: Optional[str] = "RAJON_HOST_SIMULATOR"
     connect_timeout_ms: Optional[int] = 5000
     read_timeout_ms: Optional[int] = 10000
     tls_verify: Optional[bool] = True
@@ -425,7 +425,7 @@ def seed_hsm_provider_and_external_tokens(db) -> None:
             api_endpoint="/api/host/command",
             framing_mode="ASCII",
             header_length=4,
-            source_host_id="BAOBAB_HOST_SIMULATOR",
+            source_host_id="RAJON_HOST_SIMULATOR",
             connect_timeout_ms=5000,
             read_timeout_ms=10000,
             tls_verify=True,

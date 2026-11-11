@@ -16,7 +16,7 @@ BASE_DIR = Path(r"E:\HOST_VSCODE\host-simulator").resolve()
 PATCHER_CODE = r'''#!/usr/bin/env python3
 """
 tools/patcher.py — Enterprise Installer & Anchored Patch Framework
-BAOBAB Private Host Simulator | Windows CRLF & Idempotent Patch Engine
+RAJON Private Host Simulator | Windows CRLF & Idempotent Patch Engine
 """
 
 import argparse
@@ -246,7 +246,7 @@ class PatcherSession:
         now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         lines: List[str] = []
         if header_needed:
-            lines.append("# BAOBAB PRIVATE HOST SIMULATOR — IMPLEMENTATION PROGRESS\n")
+            lines.append("# RAJON PRIVATE HOST SIMULATOR — IMPLEMENTATION PROGRESS\n")
             lines.append("Authoritative execution log updated automatically by `tools/patcher.py`.\n")
 
         lines.append(f"## [{now_str}] `{self.step_id}` — {self.title}")
@@ -285,7 +285,7 @@ class PatcherSession:
 
         lines: List[str] = []
         if header_needed:
-            lines.append("# BAOBAB PRIVATE HOST SIMULATOR — PUBLIC CONTRACTS & INTERFACES\n")
+            lines.append("# RAJON PRIVATE HOST SIMULATOR — PUBLIC CONTRACTS & INTERFACES\n")
             lines.append("Tracks database tables, columns, API routes, schemas, settings, and React routes.\n")
         lines.append(marker_tag)
         lines.append(f"## `{self.step_id}` — {section_title}")
@@ -342,11 +342,11 @@ def parse_installer_args(description: str) -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    args = parse_installer_args("BAOBAB Shared Patcher Framework")
-    print(f"[OK] BAOBAB Patcher Framework ready at {BASE_DIR} (dry_run={args.dry_run})")
+    args = parse_installer_args("RAJON Shared Patcher Framework")
+    print(f"[OK] RAJON Patcher Framework ready at {BASE_DIR} (dry_run={args.dry_run})")
 '''
 
-INITIAL_PROGRESS_MD = """# BAOBAB PRIVATE HOST SIMULATOR — IMPLEMENTATION PROGRESS
+INITIAL_PROGRESS_MD = """# RAJON PRIVATE HOST SIMULATOR — IMPLEMENTATION PROGRESS
 
 Authoritative execution log updated automatically by `tools/patcher.py`.
 
@@ -354,11 +354,11 @@ Authoritative execution log updated automatically by `tools/patcher.py`.
 - **Backend**: FastAPI, SQLAlchemy 2.0, Pydantic v2, SQLite/PostgreSQL (`backend/app/`)
 - **Core Engine**: `HostTransactionProcessor` (`backend/app/host_engine.py`)
 - **Soft-HSM**: `SoftHsmCryptoCore` & `HSMAdapter` (`backend/app/hsm_adapter.py`)
-- **Wire Codec**: Compass Plus TW TIC/TCI v2.164e (`backend/app/iso_tic.py`)
+- **Wire Codec**: Rajon TIC/TCI v2.164e (`backend/app/iso_tic.py`)
 - **Frontend**: React 18, TypeScript, Tailwind CSS, 16 views (`frontend/src/`)
 """
 
-INITIAL_CONTRACTS_MD = """# BAOBAB PRIVATE HOST SIMULATOR — PUBLIC CONTRACTS & INTERFACES
+INITIAL_CONTRACTS_MD = """# RAJON PRIVATE HOST SIMULATOR — PUBLIC CONTRACTS & INTERFACES
 
 Tracks database tables, columns, API routes, schemas, settings, and React routes.
 
@@ -374,7 +374,7 @@ def main() -> int:
     args = parser.parse_args()
 
     print("=" * 78)
-    print("  BAOBAB INSTALLER: STEP 0 — SCRIPT 1 OF 2 (Bootstrap tools/patcher.py)")
+    print("  RAJON INSTALLER: STEP 0 — SCRIPT 1 OF 2 (Bootstrap tools/patcher.py)")
     print("=" * 78)
 
     if not BASE_DIR.exists():

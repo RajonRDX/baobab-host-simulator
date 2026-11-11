@@ -1,6 +1,6 @@
 """
 MODULE 2 — models.py
-Normalized database models for the BAOBAB-Inspired Private Host Simulator.
+Normalized database models for the Rajon Private Host Simulator.
 Covers all 24 tables: Customers, Accounts, Ledger, Cards, Profiles, Limits,
 PIN/EMV Profiles, Configurable Transaction Codes/Fields, HSM Metadata/Audits,
 Transactions, Checks, Messages, Reversals, Notifications, and System Logs.
@@ -53,6 +53,28 @@ class Customer(Base):
     mobile_number: Mapped[Optional[str]] = mapped_column(String(30))
     address: Mapped[Optional[str]] = mapped_column(Text)
     customer_status: Mapped[str] = mapped_column(String(20), nullable=False, default="ACTIVE")
+    # [PATCH customer_360:profile_fields]
+    father_name: Mapped[Optional[str]] = mapped_column(String(120))
+    mother_name: Mapped[Optional[str]] = mapped_column(String(120))
+    spouse_name: Mapped[Optional[str]] = mapped_column(String(120))
+    gender: Mapped[Optional[str]] = mapped_column(String(20))
+    marital_status: Mapped[Optional[str]] = mapped_column(String(20))
+    nationality: Mapped[Optional[str]] = mapped_column(String(60))
+    place_of_birth: Mapped[Optional[str]] = mapped_column(String(100))
+    nid_number: Mapped[Optional[str]] = mapped_column(String(30))
+    passport_number: Mapped[Optional[str]] = mapped_column(String(30))
+    passport_expiry_date: Mapped[Optional[date]] = mapped_column(Date)
+    driving_license_number: Mapped[Optional[str]] = mapped_column(String(40))
+    tin_number: Mapped[Optional[str]] = mapped_column(String(30))
+    occupation: Mapped[Optional[str]] = mapped_column(String(100))
+    employer_name: Mapped[Optional[str]] = mapped_column(String(120))
+    alternate_mobile: Mapped[Optional[str]] = mapped_column(String(30))
+    permanent_address: Mapped[Optional[str]] = mapped_column(Text)
+    city: Mapped[Optional[str]] = mapped_column(String(80))
+    postal_code: Mapped[Optional[str]] = mapped_column(String(20))
+    country: Mapped[Optional[str]] = mapped_column(String(60))
+    kyc_status: Mapped[Optional[str]] = mapped_column(String(20))
+    notes: Mapped[Optional[str]] = mapped_column(Text)
 # [PATCH step02_01:customer_inst_id]
     institution_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("institutions.id"), index=True)
     institution: Mapped[Optional["Institution"]] = relationship("Institution", foreign_keys=[institution_id])
@@ -141,7 +163,14 @@ class CardProfile(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=gen_uuid)
     profile_code: Mapped[str] = mapped_column(String(40), unique=True, nullable=False)
     profile_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    institution_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("institutions.id"), index=True)
+    processing_system_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("processing_systems.id"), index=True)
+    card_type: Mapped[str] = mapped_column(String(30), nullable=False, default="DEBIT")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="BDT")
     card_product: Mapped[str] = mapped_column(String(60), nullable=False, default="VISA_DEBIT_CLASSIC")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now, onupdate=utc_now)
     transaction_permissions: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict)
     domestic_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     international_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
@@ -695,6 +724,7 @@ class BinRange(Base):
     processing_system_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("processing_systems.id"), nullable=False, index=True
     )
+    card_profile_id: Mapped[Optional[str]] = mapped_column(String(36), ForeignKey("card_profiles.id"), index=True)
     card_type: Mapped[str] = mapped_column(String(30), nullable=False, default="DEBIT")  # DEBIT, CREDIT, PREPAID
     card_product: Mapped[str] = mapped_column(String(60), nullable=False, default="VISA_DEBIT_CLASSIC")
     scheme: Mapped[str] = mapped_column(String(30), nullable=False, default="ITCL")
@@ -707,6 +737,7 @@ class BinRange(Base):
 
     institution: Mapped["Institution"] = relationship("Institution", back_populates="bin_ranges")
     processing_system: Mapped["ProcessingSystem"] = relationship("ProcessingSystem", back_populates="bin_ranges")
+    card_profile: Mapped[Optional["CardProfile"]] = relationship("CardProfile", foreign_keys=[card_profile_id])
 
 
 # [PATCH step03_01:audit_trail_model]
@@ -908,3 +939,22 @@ class PanRoutingRule(Base):
     acquirer_institution: Mapped[Optional["Institution"]] = relationship("Institution", foreign_keys=[acquirer_institution_id])
     processing_system: Mapped[Optional["ProcessingSystem"]] = relationship("ProcessingSystem", foreign_keys=[processing_system_id])
 
+# [PATCH step13_01:export_limits_profiles_models]
+from app.models_limits_profiles import (  # noqa: E402, F401
+    LimitDefinition,
+    AuthorizationProfile,
+    AuthProfileTxCodePermission,
+    AuthProfileLimitAssignment,
+    TxCodeLimitImpact,
+    LimitUsageRecord,
+    LimitTransactionConsumption,
+    LimitEvaluationAudit,
+)
+
+# [PATCH local_host:models]
+from app.models_local_host import (  # noqa: E402, F401
+    LocalHostPolicy,
+    HostAlgo,
+    HostAlgoVersion,
+    HostAlgoLog,
+)

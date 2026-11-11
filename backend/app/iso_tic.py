@@ -1,7 +1,7 @@
 """
 MODULE 7 — iso_tic.py
 TIC / TCI ISO 8583 Message Decoder, Validator, Builder, and Response Formatter.
-Directly preserves the Compass Plus TW International Interconnection Protocol (spec v.2.164e)
+Directly preserves the Rajon International Interconnection Protocol (spec v.2.164e)
 field definitions, lengths, encodings, and subfield parsers from `tic_decoder (1).py`.
 """
 
@@ -11,7 +11,7 @@ from app.security import mask_pan, mask_raw_tic_message
 # [PATCH step00_02:iso_tic_imports]
 from app.config import settings
 
-# Exact field definitions from Compass Plus TW TIC/TCI Spec v.2.164e
+# Exact field definitions from Rajon TIC/TCI Spec v.2.164e
 FIELD_DEFS: Dict[int, Tuple[str, str, str, Optional[int]]] = {
     2:   ("PAN",                           "N",   "LLVAR",     None),
     3:   ("Processing Code",               "N",   "FIXED",     7),
@@ -185,7 +185,7 @@ def build_tic_message(
     h3: str = "000",
 ) -> Tuple[str, str]:
     """
-    Build a raw Compass Plus TW TIC/TCI message from MTI and field dictionary.
+    Build a raw Rajon TIC/TCI message from MTI and field dictionary.
     Returns (raw_tic_message, compact_tic_line).
     """
     clean_fields = {int(k): str(v) for k, v in fields.items() if v is not None and str(v) != ""}

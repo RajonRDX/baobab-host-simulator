@@ -45,7 +45,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version="1.0.0",
-    description="BAOBAB-Inspired Private Banking Host Simulator with Compass Plus TW TIC/TCI v2.164e and Thales 10K Soft-HSM Integration",
+    description="Rajon Private Banking Host Simulator with Rajon TIC/TCI v2.164e and Thales 10K Soft-HSM Integration",
     lifespan=lifespan,
 )
 

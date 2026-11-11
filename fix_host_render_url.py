@@ -1,6 +1,6 @@
 # E:\HOST_VSCODE\host-simulator\fix_host_render_url.py
 """
-Automated Production Patcher for BAOBAB Host Simulator
+Automated Production Patcher for RAJON Host Simulator
 Configures HSM_REMOTE_URL = https://thales-10k-soft-hsm.onrender.com/api/host/command
 and eliminates Provider Isolation Violation & Provider Switch Failed errors on Render.
 """
@@ -36,7 +36,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     # Application
-    APP_NAME: str = "BAOBAB Private Host Simulator"
+    APP_NAME: str = "RAJON Private Host Simulator"
     APP_ENV: str = "production"
 
     # Security
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 720
 
     # Database
-    DATABASE_URL: str = "sqlite:///./baobab_host.db"
+    DATABASE_URL: str = "sqlite:///./rajon_host.db"
 
     # =====================================================
     # HSM CONFIGURATION (PRODUCTION RENDER SOFT-HSM)
@@ -186,15 +186,15 @@ def patch_lmk_service(path: Path) -> None:
     # 2. Add User-Agent header to urllib requests so Render/Cloudflare proxy never blocks Host -> HSM calls
     text = text.replace(
         'headers={"Content-Type": "application/json"},',
-        'headers={"Content-Type": "application/json", "User-Agent": "BAOBAB-Host-Simulator/1.0"},'
+        'headers={"Content-Type": "application/json", "User-Agent": "RAJON-Host-Simulator/1.0"},'
     )
     text = text.replace(
         'req = urllib.request.Request(self.status_url, method="GET")',
-        'req = urllib.request.Request(self.status_url, headers={"User-Agent": "BAOBAB-Host-Simulator/1.0"}, method="GET")'
+        'req = urllib.request.Request(self.status_url, headers={"User-Agent": "RAJON-Host-Simulator/1.0"}, method="GET")'
     )
     text = text.replace(
         'req = urllib.request.Request(self.keys_url, method="GET")',
-        'req = urllib.request.Request(self.keys_url, headers={"User-Agent": "BAOBAB-Host-Simulator/1.0"}, method="GET")'
+        'req = urllib.request.Request(self.keys_url, headers={"User-Agent": "RAJON-Host-Simulator/1.0"}, method="GET")'
     )
 
     # 3. Inject DEFAULT_EXTERNAL_HSM_KEYS if not present
@@ -322,7 +322,7 @@ def patch_lmk_router(path: Path) -> None:
     backup_file(path)
     text = path.read_text(encoding="utf-8")
     # Replace any localhost default in router with Render URL
-    text = text.replace("https://thales-10k-soft-hsm.onrender.com/api/host/command", RENDER_HSM_CMD_URL)
+    text = text.replace("http://127.0.0.1:8001/api/host/command", RENDER_HSM_CMD_URL)
     text = text.replace("http://127.0.0.1:8000", RENDER_HSM_BASE)
     if "seed_fallback_external_keys" not in text:
         text = text.replace(

@@ -1,5 +1,5 @@
 """
-tic_decoder_engine.py — Integrated Compass Plus TW TIC/TCI v2.164e & ISO 8583:1987 Decoder
+tic_decoder_engine.py — Integrated Rajon TIC/TCI v2.164e & ISO 8583:1987 Decoder
 Reuses the complete field definitions, lookup tables, subfield parsers (_pf3.._pf126, UAMP F123-F125),
 and Excel/Text report formatters from `tic_decoder.py`, while enforcing strict payment-switch
 security masking (PAN, PIN blocks, CVV/CVV2, Track 1/2, and secret keys).

@@ -1090,7 +1090,7 @@ export const CardLimitsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold">Card-Level Limits (BAOBAB CHECKCARDLIMITS)</h1>
+        <h1 className="text-xl font-bold">Card-Level Limits (RAJON CHECKCARDLIMITS)</h1>
         <p className="text-xs text-slate-500">Configure per-transaction, daily, weekly, and monthly card limits and inspect live usage counters</p>
       </div>
       {msg && <div className="p-3 rounded bg-emerald-500/10 text-emerald-500 text-xs font-mono">{msg}</div>}

@@ -2,7 +2,7 @@
 """
 tools/fix_all_issues_modern_maintenance.py
 ============================================================
-BAOBAB Private Host Simulator — Comprehensive Fix Pack
+RAJON Private Host Simulator — Comprehensive Fix Pack
 
 Fixes delivered:
   1. Customer tab (CustomersPage) — robust load, error banner, institutions race fixed

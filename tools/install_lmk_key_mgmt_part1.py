@@ -287,7 +287,7 @@ class ExternalSoftHSMBridge:
         raw_command: str,
         header_length: int = 4,
         synthetic_mode: bool = False,
-        source_host: str = "BAOBAB_HOST_KEY_MANAGER",
+        source_host: str = "RAJON_HOST_KEY_MANAGER",
     ) -> Dict[str, Any]:
         payload = json.dumps({
             "command": raw_command,
@@ -402,7 +402,7 @@ class LMKKeyManagementService:
                 "lmk_check_value": f"{kcv6}0000000000",
                 "lmk_kcv_short": kcv6,
                 "firmware": "INTERNAL-SIM-1.0",
-                "software_revision": "BAOBAB Internal Soft-HSM Core",
+                "software_revision": "RAJON Internal Soft-HSM Core",
                 "remote_url": settings.HSM_REMOTE_URL,
                 "key_counts": {"internal_keys": internal_count, "external_keys": external_count},
                 "persistence_audit": {

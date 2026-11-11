@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
 
     # Application
-    APP_NAME: str = "BAOBAB Private Host Simulator"
+    APP_NAME: str = "RAJON Private Host Simulator"
     APP_ENV: str = "production"
 
     # Security

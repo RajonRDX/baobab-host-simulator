@@ -1,7 +1,7 @@
 import axios from 'axios';
-import { getToken } from '../api';
+import { getToken, ensureSilentAuthSession, clearAuthSession } from '../api';
 
-const HOST_BACKEND_URL = (import.meta as any).env?.VITE_HOST_API_URL || '';  // [PATCH same_origin_api]
+const HOST_BACKEND_URL = (import.meta as any).env?.VITE_HOST_API_URL || 'http://127.0.0.1:8000';
 
 export const api = axios.create({
   baseURL: HOST_BACKEND_URL,
@@ -10,13 +10,17 @@ export const api = axios.create({
   },
 });
 
-api.interceptors.request.use((config) => {
-  const token =
+api.interceptors.request.use(async (config) => {
+  let token =
     getToken() ||
-    sessionStorage.getItem('BAOBAB_AUTH_TOKEN') ||
-    localStorage.getItem('BAOBAB_AUTH_TOKEN') ||
-    sessionStorage.getItem('token') ||
-    localStorage.getItem('token');
+    localStorage.getItem('RAJON_AUTH_TOKEN') ||
+    sessionStorage.getItem('RAJON_AUTH_TOKEN') ||
+    localStorage.getItem('token') ||
+    sessionStorage.getItem('token');
+
+  if (!token && config.url && !config.url.includes('/auth/login')) {
+    token = await ensureSilentAuthSession();
+  }
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -31,10 +35,23 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      sessionStorage.removeItem('BAOBAB_AUTH_TOKEN');
-      window.location.hash = '#/login';
+  async (error) => {
+    const originalConfig = error.config;
+    if (
+      error.response &&
+      error.response.status === 401 &&
+      originalConfig &&
+      !originalConfig._retry &&
+      !String(originalConfig.url || '').includes('/auth/login')
+    ) {
+      originalConfig._retry = true;
+      clearAuthSession();
+      const newToken = await ensureSilentAuthSession();
+      if (newToken) {
+        originalConfig.headers = originalConfig.headers || {};
+        originalConfig.headers.Authorization = `Bearer ${newToken}`;
+        return api(originalConfig);
+      }
     }
     return Promise.reject(error);
   }

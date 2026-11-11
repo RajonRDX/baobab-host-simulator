@@ -1,6 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import { apiFetch } from '../api';
 
+// [PATCH customer_360:fields]
+// Extra customer identity fields: [key, label, input type]
+const CUSTOMER_EXTRA_INPUTS: [string, string, string][] = [
+  ['father_name', "Father's name", 'text'],
+  ['mother_name', "Mother's name", 'text'],
+  ['spouse_name', 'Spouse name', 'text'],
+  ['date_of_birth', 'Date of birth', 'date'],
+  ['gender', 'Gender (MALE/FEMALE/OTHER)', 'text'],
+  ['marital_status', 'Marital status', 'text'],
+  ['nationality', 'Nationality', 'text'],
+  ['place_of_birth', 'Place of birth', 'text'],
+  ['nid_number', 'NID number', 'text'],
+  ['passport_number', 'Passport number', 'text'],
+  ['passport_expiry_date', 'Passport expiry', 'date'],
+  ['driving_license_number', 'Driving licence no.', 'text'],
+  ['tin_number', 'TIN', 'text'],
+  ['occupation', 'Occupation', 'text'],
+  ['employer_name', 'Employer', 'text'],
+  ['alternate_mobile', 'Alternate mobile', 'text'],
+  ['address', 'Present address', 'text'],
+  ['permanent_address', 'Permanent address', 'text'],
+  ['city', 'City', 'text'],
+  ['postal_code', 'Postal code', 'text'],
+  ['country', 'Country', 'text'],
+  ['kyc_status', 'KYC status (PENDING/VERIFIED)', 'text'],
+];
+const CUSTOMER_DATE_KEYS = ['date_of_birth', 'passport_expiry_date'];
+// Create: drop empty values so optional fields stay empty
+const cleanCustomerCreate = (f: Record<string, any>) => {
+  const out: Record<string, any> = {};
+  Object.keys(f).forEach((k) => {
+    const v = f[k];
+    if (v === '' || v === null || v === undefined) return;
+    out[k] = v;
+  });
+  return out;
+};
+
 // ============================================================================
 // PAGE 2: CUSTOMERS (CIF)
 // ============================================================================
@@ -24,6 +62,27 @@ export const CustomersPage: React.FC = () => {
     customer_status: 'ACTIVE',
     risk_category: 'NORMAL',
     institution_id: '',
+    father_name: '',
+    mother_name: '',
+    spouse_name: '',
+    date_of_birth: '',
+    gender: '',
+    marital_status: '',
+    nationality: '',
+    place_of_birth: '',
+    nid_number: '',
+    passport_number: '',
+    passport_expiry_date: '',
+    driving_license_number: '',
+    tin_number: '',
+    occupation: '',
+    employer_name: '',
+    alternate_mobile: '',
+    permanent_address: '',
+    city: '',
+    postal_code: '',
+    country: '',
+    kyc_status: '',
   });
 
   const load = async () => {
@@ -59,12 +118,21 @@ export const CustomersPage: React.FC = () => {
     e.preventDefault();
     try {
       setErrorBanner('');
-      await apiFetch('/customers', { method: 'POST', body: JSON.stringify(form) });
+      await apiFetch('/customers', { method: 'POST', body: JSON.stringify(cleanCustomerCreate(form)) });
       setForm({
         ...form,
         customer_number: `CUST-${Math.floor(1006 + Math.random() * 9000)}`,
         first_name: '',
         last_name: '',
+        father_name: '',
+        mother_name: '',
+        spouse_name: '',
+        date_of_birth: '',
+        nid_number: '',
+        passport_number: '',
+        passport_expiry_date: '',
+        driving_license_number: '',
+        tin_number: '',
       });
       load();
     } catch (err: any) {
@@ -86,6 +154,12 @@ export const CustomersPage: React.FC = () => {
           mobile_number: editCust.mobile_number,
           risk_category: editCust.risk_category,
           customer_status: editCust.customer_status,
+          ...Object.fromEntries(
+            CUSTOMER_EXTRA_INPUTS.map(([k]) => {
+              const v = editCust[k];
+              return [k, v === '' || v === undefined ? null : v];
+            })
+          ),
         }),
       });
       setEditCust(null);
@@ -148,7 +222,7 @@ Do you want to FORCE delete this customer for lab testing?`)) {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
           <form
             onSubmit={handleUpdateCustomer}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 max-w-md w-full space-y-4 shadow-2xl"
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 max-w-2xl w-full space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto"
           >
             <h2 className="text-sm font-bold">Edit Customer {editCust.customer_number}</h2>
             <div className="space-y-3 text-xs font-mono">
@@ -197,6 +271,21 @@ Do you want to FORCE delete this customer for lab testing?`)) {
                   <option value="HIGH">HIGH</option>
                 </select>
               </div>
+            </div>
+            {/* [PATCH customer_360:edit_extra] */}
+            <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-500 pt-1">More details</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+              {CUSTOMER_EXTRA_INPUTS.map(([key, label, type]) => (
+                <div key={key}>
+                  <label className="block text-slate-400 mb-1">{label}</label>
+                  <input
+                    type={type}
+                    value={editCust[key] || ''}
+                    onChange={(e) => setEditCust({ ...editCust, [key]: e.target.value })}
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded px-2.5 py-1.5"
+                  />
+                </div>
+              ))}
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
               <button type="button" onClick={() => setEditCust(null)} className="px-3 py-1.5 rounded text-xs">
@@ -271,6 +360,25 @@ Do you want to FORCE delete this customer for lab testing?`)) {
         >
           + Create Customer
         </button>
+        {/* [PATCH customer_360:create_extra] */}
+        <details className="md:col-span-7 group">
+          <summary className="cursor-pointer text-xs font-semibold text-emerald-500 select-none">
+            More details (father, mother, date of birth, NID, passport, address ...)
+          </summary>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+            {CUSTOMER_EXTRA_INPUTS.map(([key, label, type]) => (
+              <div key={key}>
+                <label className="block text-[11px] text-slate-400 font-mono mb-1">{label}</label>
+                <input
+                  type={type}
+                  value={(form as any)[key] || ''}
+                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs"
+                />
+              </div>
+            ))}
+          </div>
+        </details>
       </form>
 
       {/* Search + pagination */}
@@ -437,8 +545,8 @@ export const CardsPage: React.FC = () => {
     institution_id: '',
     test_pan_reference: `456789012345${Math.floor(1000 + Math.random() * 8999)}`,
     cardholder_name: 'SYNTHETIC CARDHOLDER',
-    expiry_month: 12,
-    expiry_year: 2028,
+    expiry_month: new Date().getMonth() + 1,
+    expiry_year: new Date().getFullYear() + 3,
     card_type: 'DEBIT',
     card_product: 'VISA_DEBIT_CLASSIC',
     pin: '1234',
@@ -698,7 +806,7 @@ export const CardsPage: React.FC = () => {
       )}
 
       {/* Card Issuance Form */}
-      <form onSubmit={handleIssue} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 grid grid-cols-1 md:grid-cols-7 gap-3">
+      <form onSubmit={handleIssue} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 grid grid-cols-1 md:grid-cols-8 gap-3">
         <div>
           <label className="block text-[11px] text-slate-400 font-mono mb-1">Bank</label>
           <select value={form.institution_id} onChange={(e) => setForm({ ...form, institution_id: e.target.value })} className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-2 text-xs font-mono">
@@ -730,6 +838,30 @@ export const CardsPage: React.FC = () => {
         <div>
           <label className="block text-[11px] text-slate-400 font-mono mb-1">Cardholder Name</label>
           <input value={form.cardholder_name} onChange={(e) => setForm({ ...form, cardholder_name: e.target.value })} placeholder="Name" className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-3 py-2 text-xs font-mono" required />
+        </div>
+        {/* [PATCH customer_360:card_expiry] */}
+        <div>
+          <label className="block text-[11px] text-slate-400 font-mono mb-1">Expiry (MM / YYYY)</label>
+          <div className="flex gap-1.5">
+            <select
+              value={form.expiry_month}
+              onChange={(e) => setForm({ ...form, expiry_month: Number(e.target.value) })}
+              className="w-16 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-1.5 py-2 text-xs font-mono"
+            >
+              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                <option key={m} value={m}>{String(m).padStart(2, '0')}</option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min={2000}
+              max={2099}
+              value={form.expiry_year}
+              onChange={(e) => setForm({ ...form, expiry_year: e.target.value as any })}
+              className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-2 text-xs font-mono"
+              required
+            />
+          </div>
         </div>
         <div>
           <label className="block text-[11px] text-slate-400 font-mono mb-1">PIN (Auto-Derives PVV)</label>
@@ -1034,7 +1166,7 @@ export const CardLimitsPage: React.FC = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold">Card-Level Limits (BAOBAB CHECKCARDLIMITS)</h1>
+        <h1 className="text-xl font-bold">Card-Level Limits (RAJON CHECKCARDLIMITS)</h1>
         <p className="text-xs text-slate-500">Configure per-transaction, daily, weekly, and monthly card limits and inspect live usage counters</p>
       </div>
       {msg && <div className="p-3 rounded bg-emerald-500/10 text-emerald-500 text-xs font-mono">{msg}</div>}
